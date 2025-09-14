@@ -1,0 +1,5 @@
+# Define code owners for specific parts of the repository
+/modules/ @TWBerry
+/helpers/ @TWBerry
+/payloads/ @TWBerry
+/resources/ @TWBerry
