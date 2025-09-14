@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# modules/my_module.sh
 
 module_init() {
   URL="${1:-}"

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# modules/my_module.sh
 
 module_init() {
   URL="${1:-}"
@@ -20,14 +19,22 @@ send_cmd() {
 }
 
 module_main() {
-  : # optional
+  :
 }
 
 module_description() {
-  echo "Log-Image-Redis simple shell"
+  echo "Lightweight command execution module using GET requests. Wraps output between START/END markers for clean parsing.For Log-Image-Redis"
 }
 
 show_module_help() {
-  echo "Usage: <commands typed in REPL are passed to send_cmd>"
-  echo "Example: id ; ls -la /tmp"
+  cat <<EOF
+Usage: $0 <URL>
+
+Description:
+  Sends shell commands via HTTP GET requests.
+  Output is wrapped between START/END markers for reliable extraction.
+
+Arguments:
+  URL    Target endpoint URL
+EOF
 }
