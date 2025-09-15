@@ -63,7 +63,7 @@ show_ip() {
 _read_cookie_hex() {
   local cookie_file="$1"
   if [[ ! -r "$cookie_file" ]]; then
-    return 1
+    return 2
   fi
   if command -v xxd >/dev/null 2>&1; then
     xxd -p "$cookie_file" | tr -d '\n'
@@ -86,11 +86,11 @@ change_ip() {
       p) OPT_P="$OPTARG" ;;
       \?)
         echo "Invalid option: -$OPTARG" >&2
-        return 2
+        return 3
         ;;
       :)
         echo "Option -$OPTARG requires an argument." >&2
-        return 2
+        return 4
         ;;
     esac
   done
@@ -102,7 +102,7 @@ change_ip() {
 
   if ! command -v nc >/dev/null 2>&1; then
     echo -e "${RED}[!]${NC} 'nc' (netcat) is required to talk to Tor ControlPort." >&2
-    return 3
+    return 5
   fi
 
   # build auth/authenticate sequence
@@ -117,7 +117,7 @@ change_ip() {
     if [[ "$cookie" == "-" ]]; then
       # disallow '-' as special; just require explicit path
       echo -e "${RED}[!]${NC} Provide explicit cookie path with -c" >&2
-      return 2
+      return 6
     fi
     if [[ ! -r "$cookie" ]]; then
       # try common locations if the argument looked like 'default'
@@ -127,13 +127,13 @@ change_ip() {
         cookie="/var/run/tor/control.authcookie"
       else
         echo -e "${RED}[!]${NC} Cookie file not readable: $cookie" >&2
-        return 4
+        return 7
       fi
     fi
     local cookie_hex
     cookie_hex=$(_read_cookie_hex "$cookie") || {
       echo -e "${RED}[!]${NC} Failed to read cookie or convert to hex"
-      return 5
+      return 8
     }
     auth_line="AUTHENTICATE ${cookie_hex}\r\n"
   elif [[ -n "$OPT_P" ]]; then
@@ -149,12 +149,12 @@ change_ip() {
       local cookie_hex
       cookie_hex=$(_read_cookie_hex "$cookie") || {
         echo -e "${RED}[!]${NC} Failed to read cookie or convert to hex"
-        return 5
+        return 9
       }
       auth_line="AUTHENTICATE ${cookie_hex}\r\n"
     else
       echo -e "${RED}[!]${NC} No auth specified and no default cookie found. Use -c or -p." >&2
-      return 2
+      return 10
     fi
   fi
 
@@ -193,5 +193,5 @@ change_ip() {
   done
 
   echo -e "${YELLOW}[!]${NC} Timeout waiting for new Tor IP (tried 60s). Current IP: ${BLUE}${new_ip:-unknown}${NC}"
-  return 6
+  return 11
 }

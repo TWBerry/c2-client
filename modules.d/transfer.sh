@@ -9,6 +9,7 @@ eFSiTjxlkn_init() {
   register_function "download" "parallel_download" 7 "Download a file"
   register_function "upload" "parallel_upload" 7 "Upload a file"
   register_function "emergency_upload" "emergency_upload" 3 "Emergency upload for non-binary files"
+  register_function "emergency_download" "emergency_download" 3 "Emergency download for small non-binary files"
 }
 
 eFSiTjxlkn_description() {
@@ -19,45 +20,128 @@ eFSiTjxlkn_help() {
   echo -e "${BLUE}download ${NC}<remote> [-c chunk_size] [-o local] [-t threads]"
   echo -e "${BLUE}upload ${NC}<local> [-c chunk_size] [-o remote] [-t threads]"
   echo -e "${BLUE}emergency_upload ${NC}<local> [-o remote]"
+  echo -e "${BLUE}emergency_upload ${NC} <remote> [-o local]"
 }
 
+# emergency_download <remote_file> [-o local_file]
+# Performs a remote `cat` on <remote_file> via send_cmd and writes the output to a local file.
+# If -o is not provided, the local filename defaults to the basename of the remote file.
+emergency_download() {
+    local REMOTE_FILE="$1"
+    local LOCAL_OUT=""
+    shift
+
+    # parse optional -o
+    while getopts "o:" opt; do
+        case "$opt" in
+            o) LOCAL_OUT="$OPTARG" ;;
+            \?) echo "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2; return 1 ;;
+            :)  echo "${RED}[!]${NC} Missing value for -$OPTARG" >&2; return 1 ;;
+        esac
+    done
+
+    if [[ -z "$REMOTE_FILE" ]]; then
+        echo -e "${RED}[!]${NC} Usage: emergency_download <remote_file> [-o local_file]"
+        return 1
+    fi
+
+    # default local filename: basename of remote file
+    if [[ -z "$LOCAL_OUT" ]]; then
+        LOCAL_OUT="$(basename "$REMOTE_FILE")"
+    fi
+
+    # escape single quotes in remote filename for safe single-quoted shell literal:
+    # e.g. file'name -> 'file'"'"'name'
+    local REMOTE_ESCAPED
+    REMOTE_ESCAPED=$(printf "%s" "$REMOTE_FILE" | sed "s/'/'\"'\"'/g")
+
+    # build remote command: cat 'remote_file' 2>/dev/null
+    local REMOTE_CMD
+    REMOTE_CMD="cat '$REMOTE_ESCAPED' 2>/dev/null"
+
+    echo -e "${GREEN}[*]${NC} Downloading remote file '$REMOTE_FILE' -> local '$LOCAL_OUT' ..."
+
+    # call send_cmd and stream output to local file
+    # Note: send_cmd is expected to write the remote command output to stdout.
+    # Using a subshell redirection to capture exit status of send_cmd.
+    if send_cmd "$REMOTE_CMD" >"$LOCAL_OUT"; then
+        # quick sanity check: ensure file is non-empty (optional)
+        if [[ -s "$LOCAL_OUT" ]]; then
+            local SIZE
+            SIZE=$(stat -c%s "$LOCAL_OUT" 2>/dev/null || wc -c <"$LOCAL_OUT")
+            echo -e "${GREEN}[+]${NC} Download complete: $LOCAL_OUT ($SIZE bytes)"
+            return 0
+        else
+            echo -e "${RED}[!]${NC} Download produced empty file: $LOCAL_OUT"
+            return 2
+        fi
+    else
+        echo -e "${RED}[!]${NC} send_cmd failed while attempting to cat remote file"
+        rm -f "$LOCAL_OUT" 2>/dev/null || true
+        return 3
+    fi
+}
+
+# emergency_upload <local_file> [-o remote_file]
+# Uploads a local file using `cat` piped through send_cmd into a remote file.
+# If -o is not specified, the remote file name defaults to the basename of the local file.
 emergency_upload() {
-  local local_file="$1"
-  local remote_file="$local_file"
+    local LOCAL_FILE="$1"
+    local REMOTE_FILE=""
+    shift
 
-  if [ -z "$local_file" ] || [ -z "$remote_file" ]; then
-    echo "Usage: emergency_upload <local_file> [-o remote_file]"
-    return 1
-  fi
-  shift
-  while getopts "o:" opt; do
-    case $opt in
-      o)
-        remote_file="$OPTARG"
-        ;;
-      \?)
-        echo "${RED}[+]${NC}Unknown parameter: -$OPTARG" >&2
-        return 1
-        ;;
-      :)
-        echo "${RED}[+]${NC}Bad value for -$OPTARG" >&2
-        return 1
-        ;;
-    esac
-  done
-  # clear remote file first
-  send_cmd "echo -n '' > $remote_file"
-  local lineno=0
-  while IFS= read -r line; do
-    lineno=$((lineno + 1))
-    # escape quotes to avoid breaking echo
-    safe_line=$(printf "%s" "$line" | sed "s/'/'\"'\"'/g")
-    send_cmd "echo '$safe_line' >> $remote_file"
-    echo -e "${GREEN}[*]${NC} Sent line $lineno"
-  done <"$local_file"
+    # parse optional -o
+    while getopts "o:" opt; do
+        case "$opt" in
+            o) REMOTE_FILE="$OPTARG" ;;
+            \?) echo "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2; return 1 ;;
+            :)  echo "${RED}[!]${NC} Missing value for -$OPTARG" >&2; return 1 ;;
+        esac
+    done
 
-  echo -e "${GREEN}[+]${NC} Upload complete -> $remote_file"
+    if [[ -z "$LOCAL_FILE" ]]; then
+        echo -e "${RED}[!]${NC} Usage: emergency_upload <local_file> [-o remote_file]"
+        return 1
+    fi
+
+    if [[ ! -f "$LOCAL_FILE" ]]; then
+        echo -e "${RED}[!]${NC} Local file not found: $LOCAL_FILE"
+        return 1
+    fi
+
+    # default remote filename
+    if [[ -z "$REMOTE_FILE" ]]; then
+        REMOTE_FILE="$(basename "$LOCAL_FILE")"
+    fi
+
+    # escape remote file path for safety
+    local REMOTE_ESCAPED
+    REMOTE_ESCAPED=$(printf "%s" "$REMOTE_FILE" | sed "s/'/'\"'\"'/g")
+
+    echo -e "${GREEN}[*]${NC} Uploading local file '$LOCAL_FILE' -> remote '$REMOTE_FILE' ..."
+
+    # stream local file into send_cmd which runs "cat > 'remote_file'"
+    if cat "$LOCAL_FILE" | send_cmd "cat > '$REMOTE_ESCAPED'"; then
+        local LOCAL_SIZE
+        LOCAL_SIZE=$(stat -c%s "$LOCAL_FILE")
+
+        # get remote size
+        local REMOTE_SIZE
+        REMOTE_SIZE=$(send_cmd "ls -l '$REMOTE_ESCAPED' 2>/dev/null | awk '{print \$5}'")
+
+        if [[ "$LOCAL_SIZE" -eq "$REMOTE_SIZE" ]]; then
+            echo -e "${GREEN}[+]${NC} Upload verified: $REMOTE_FILE ($LOCAL_SIZE bytes)"
+            return 0
+        else
+            echo -e "${RED}[!]${NC} Size mismatch: local=$LOCAL_SIZE, remote=$REMOTE_SIZE"
+            return 3
+        fi
+    else
+        echo -e "${RED}[!]${NC} send_cmd failed while attempting to upload"
+        return 2
+    fi
 }
+
 
 # remote_check_b64helper(): vrací název helperu který funguje: base64|openssl|php|python3|python|perl|ruby|none
 remote_check_b64helper() {

@@ -20,7 +20,7 @@ make_new_module() {
     return 1
   fi
 
-  # generate ID (10 alnum chars)
+  # generate ID (10 case-mixed letters)
   local ID
   ID=$(LC_ALL=C tr -dc 'A-Za-z' </dev/urandom | head -c 10 || true)
 
@@ -54,6 +54,10 @@ make_new_module() {
 # usage: register_module <module_name>
 register_module() {
   local name="$1"
+  if grep -E -n "send_cmd" "modules.d/$name.sh" >/dev/null 2>&1; then
+        echo "Error: Cannot register module '${name}' — contains 'send_cmd'. Shell modules cannot be registered."
+        return 1
+    fi
   # create file if missing
   touch "$MODULES_LIST"
   if LC_ALL=C grep -Fxq -- "$name" "$MODULES_LIST"; then
