@@ -90,7 +90,6 @@ emergency_upload() {
     local REMOTE_FILE=""
     shift
 
-    # parse optional -o
     while getopts "o:" opt; do
         case "$opt" in
             o) REMOTE_FILE="$OPTARG" ;;
@@ -103,29 +102,29 @@ emergency_upload() {
         echo -e "${RED}[!]${NC} Usage: emergency_upload <local_file> [-o remote_file]"
         return 1
     fi
-
     if [[ ! -f "$LOCAL_FILE" ]]; then
         echo -e "${RED}[!]${NC} Local file not found: $LOCAL_FILE"
         return 1
     fi
 
-    # default remote filename
     if [[ -z "$REMOTE_FILE" ]]; then
         REMOTE_FILE="$(basename "$LOCAL_FILE")"
     fi
 
-    # escape remote file path for safety
     local REMOTE_ESCAPED
     REMOTE_ESCAPED=$(printf "%s" "$REMOTE_FILE" | sed "s/'/'\"'\"'/g")
 
     echo -e "${GREEN}[*]${NC} Uploading local file '$LOCAL_FILE' -> remote '$REMOTE_FILE' ..."
 
-    # stream local file into send_cmd which runs "cat > 'remote_file'"
-    if cat "$LOCAL_FILE" | send_cmd "cat > '$REMOTE_ESCAPED'"; then
+    # načti obsah a escape
+    local FILE_CONTENT
+    FILE_CONTENT=$(<"$LOCAL_FILE")
+    FILE_CONTENT_ESCAPED=$(printf "%s" "$FILE_CONTENT" | sed "s/'/'\\\\''/g")
+
+    if send_cmd "printf '%s' '$FILE_CONTENT_ESCAPED' > '$REMOTE_ESCAPED'"; then
+        send_cmd "echo >> '$REMOTE_ESCAPED'"
         local LOCAL_SIZE
         LOCAL_SIZE=$(stat -c%s "$LOCAL_FILE")
-
-        # get remote size
         local REMOTE_SIZE
         REMOTE_SIZE=$(send_cmd "ls -l '$REMOTE_ESCAPED' 2>/dev/null | awk '{print \$5}'")
 

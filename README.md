@@ -22,9 +22,9 @@ c2-client/
 │  ├─ tor.sh          # tor socks proxy manipulation
 │  ├─ *shell.sh       # core shell modules
 │  └─ ...
-├─ funcmgr.sh        # function/module manager
-├─ module.sh         # module management tool
-├─ c2-client.sh      # main client entrypoint
+├─ funcmgr.sh         # function/module manager
+├─ modules.sh         # module management tool
+├─ c2-client.sh       # main client entrypoint
 ├─ README.md
 └─ CONTRIBUTORS.md
 ```
@@ -47,7 +47,7 @@ ls modules
 3. Launch the client (inside your test lab):
 
 ```bash
-./c2-client.sh
+./c2-client.sh <shell_,module> <url> [shell_module_args]
 ```
 
 > **Note:** This software is for testing and educational purposes in controlled environments only. Do not use it for unauthorized access or attacks.
@@ -90,11 +90,11 @@ Where:
 
 ## Module Management (module.sh)
 
-Modules are managed through the `module.sh` tool:
+Modules are managed through the `modules.sh` tool:
 
-* `./module.sh create <module_name>` — create a new module (auto-assigns a 10-char ID)
-* `./module.sh register <module_name>` — register the module for use in the C2 client
-* `./module.sh unregister <module_name>` — unregister and disable the module in the C2 client
+* `./modules.sh create <module_name>` — create a new module (auto-assigns a 10-char ID)
+* `./modules.sh register <module_name>` — register the module for use in the C2 client
+* `./modules.sh unregister <module_name>` — unregister and disable the module in the C2 client
 
 ## Example Usage
 
@@ -107,7 +107,7 @@ net_summary
 * Call a specific registered function:
 
 ```
-detecz_sandbox
+detect_sandbox
 ```
 
 ## Contribution
