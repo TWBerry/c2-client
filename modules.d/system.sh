@@ -65,18 +65,18 @@ explore() {
 }
 
 detect_sandbox() {
-  echo -e "${GREEN}[*] Checking for sandbox or VM environment on remote system...${NC}"
+  echo -e "${GREEN}[*] ${YELLOW}Checking for sandbox or VM environment on remote system...${NC}"
   local DETECTED=0
 
   # 1. Docker / LXC / Kubernetes detection via cgroup
   if send_cmd "grep -qE 'docker|lxc|kubepods' /proc/1/cgroup && echo yes || echo no" | grep -q yes; then
-    echo -e "${YELLOW}[!] Detected containerized environment (Docker/LXC/Kubernetes)${NC}"
+    echo -e "${GREEN}[!] ${YELLOW}Detected containerized environment (Docker/LXC/Kubernetes)${NC}"
     DETECTED=1
   fi
 
   # 2. Bubblewrap detection via mount
   if send_cmd "mount | grep -q '/bubblewrap' && echo yes || echo no" | grep -q yes; then
-    echo -e "${YELLOW}[!] Detected Bubblewrap sandbox${NC}"
+    echo -e "${GREEN}[!] ${YELLOW}Detected Bubblewrap sandbox${NC}"
     DETECTED=1
   fi
 
@@ -85,47 +85,47 @@ detect_sandbox() {
   PN=$(send_cmd "cat /sys/class/dmi/id/product_name 2>/dev/null || echo unknown")
   case "$PN" in
     *VirtualBox*)
-      echo -e "${YELLOW}[!] Detected VirtualBox VM${NC}"
+      echo -e "${GREEN}[!] ${YELLOW}Detected VirtualBox VM${NC}"
       DETECTED=1
       ;;
     *VMware*)
-      echo -e "${YELLOW}[!] Detected VMware VM${NC}"
+      echo -e "${GREEN}[!] ${YELLOW}Detected VMware VM${NC}"
       DETECTED=1
       ;;
     *KVM*)
-      echo -e "${YELLOW}[!] Detected KVM/QEMU VM${NC}"
+      echo -e "${GREEN}[!] ${YELLOW}Detected KVM/QEMU VM${NC}"
       DETECTED=1
       ;;
     *Bochs*)
-      echo -e "${YELLOW}[!] Detected Bochs VM${NC}"
+      echo -e "${GREEN}[!] ${YELLOW}Detected Bochs VM${NC}"
       DETECTED=1
       ;;
     *Microsoft*Virtual*)
-      echo -e "${YELLOW}[!] Detected Hyper-V VM${NC}"
+      echo -e "${GREEN}[!] ${YELLOW}Detected Hyper-V VM${NC}"
       DETECTED=1
       ;;
   esac
 
   # 4. Hypervisor flag in CPU info
   if send_cmd "grep -q 'hypervisor' /proc/cpuinfo && echo yes || echo no" | grep -q yes; then
-    echo -e "${YELLOW}[!] Hypervisor flag detected in CPU info${NC}"
+    echo -e "${GREEN}[!] ${YELLOW}Hypervisor flag detected in CPU info${NC}"
     DETECTED=1
   fi
 
   # 5. systemd-nspawn container check
   if send_cmd "grep -q 'systemd-nspawn' /proc/1/cmdline && echo yes || echo no" | grep -q yes; then
-    echo -e "${YELLOW}[!] Detected systemd-nspawn container${NC}"
+    echo -e "${GRERN}[!] ${YELLOW}Detected systemd-nspawn container${NC}"
     DETECTED=1
   fi
 
   # 6. Container-specific devices
   if send_cmd "[ -d /dev/.lxc ] && echo yes || [ -d /dev/.dockerinit ] && echo yes || echo no" | grep -q yes; then
-    echo -e "${YELLOW}[!] Detected container-specific devices (/dev/.lxc or /dev/.dockerinit)${NC}"
+    echo -e "${YGREEN}[!] ${YELLOW}Detected container-specific devices (/dev/.lxc or /dev/.dockerinit)${NC}"
     DETECTED=1
   fi
 
   if [[ "$DETECTED" -eq 0 ]]; then
-    echo -e "${GREEN}[+] No sandbox or VM detected on remote system.${NC}"
+    echo -e "${GREEN}[+] ${YELLOW}No sandbox or VM detected on remote system.${NC}"
   fi
 }
 

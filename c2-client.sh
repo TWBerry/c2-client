@@ -60,7 +60,7 @@ load_modules() {
     # spustíme init
     "${id}_init"
 
-    echo -e "${GREEN}[+]${NC} Module $mod loaded. Description:"
+    echo -e "${GREEN}[+]${NC} Module $mod loaded."
     "${id}_description"
   done <modules
 }

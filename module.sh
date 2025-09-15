@@ -92,6 +92,7 @@ Commands:
   new <module_name> [output_path]      Create a new module file (default dir: $MODULES_DIR)
   register <module_name>               Add module name to $MODULES_LIST (no duplicates)
   unregister <module_name>             Remove module name from $MODULES_LIST
+  list
   help                                 Show this help
 USG
 }

@@ -7,7 +7,7 @@ source funcmgr.sh
 uONYoUDBwv_init() {
   register_function "enable_tor" "enable_tor" "0" 'Enable tor socks proxy'
   register_function "disable_tor" "disable_tor" "0" 'Disable tor socks proxy'
-  register_function "show_ip" "show_ip" "0" "Show public IP (via Tor if enabled)"
+  register_function "show_ip" "show_ip" "0" "Show public IP"
   register_function "change_ip" "change_ip" "2" "Request new Tor identity"
 }
 
@@ -20,10 +20,10 @@ uONYoUDBwv_description() {
 }
 
 uONYoUDBwv_help() {
-  echo -e "${BLUE}enable_tor${NC}    - enable tor socks proxy"
-  echo -e "${BLUE}disable_tor${NC}   - disable tor socks proxy"
-  echo -e "${BLUE}show_ip${NC}       - show public ip (uses Tor proxy if enabled)"
-  echo -e "${BLUE}change_ip${NC}     - change Tor exit IP (options: -c cookie_path | -p password)"
+  echo -e "${BLUE}enable_tor${NC} enable tor socks proxy"
+  echo -e "${BLUE}disable_tor${NC} disable tor socks proxy"
+  echo -e "${BLUE}show_ip${NC} show public ip (uses Tor proxy if enabled)"
+  echo -e "${BLUE}change_ip${NC} change Tor exit IP (options: -c cookie_path | -p password)"
 }
 
 enable_tor() {
