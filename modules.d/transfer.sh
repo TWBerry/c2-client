@@ -1,26 +1,27 @@
 #!/usr/bin/env bash
 #c2-client module
 #eFSiTjxlkn
-#transfer
+#File transfer module
 
 source funcmgr.sh
 PROGRESS_WIDTH=25
+
 eFSiTjxlkn_init() {
-  register_function "download" "parallel_download" 7 "Download a file"
-  register_function "upload" "parallel_upload" 7 "Upload a file"
-  register_function "emergency_upload" "emergency_upload" 3 "Emergency upload for non-binary files"
-  register_function "emergency_download" "emergency_download" 3 "Emergency download for small non-binary files"
+    register_function "download" "parallel_download" 7 "Download a file"
+    register_function "upload" "parallel_upload" 7 "Upload a file"
+    register_function "emergency_upload" "emergency_upload" 3 "Emergency upload for small non-binary files"
+    register_function "emergency_download" "emergency_download" 3 "Emergency download for small non-binary files"
 }
 
 eFSiTjxlkn_description() {
-  echo "File Upload/Download module"
+    echo "File Upload/Download module"
 }
 
 eFSiTjxlkn_help() {
-  echo -e "${BLUE}download ${NC}<remote> [-c chunk_size] [-o local] [-t threads]"
-  echo -e "${BLUE}upload ${NC}<local> [-c chunk_size] [-o remote] [-t threads]"
-  echo -e "${BLUE}emergency_upload ${NC}<local> [-o remote]"
-  echo -e "${BLUE}emergency_upload ${NC} <remote> [-o local]"
+    echo -e "${BLUE}download ${NC}<remote> [-c chunk_size] [-o local] [-t threads]"
+    echo -e "${BLUE}upload ${NC}<local> [-c chunk_size] [-o remote] [-t threads]"
+    echo -e "${BLUE}emergency_upload ${NC}<local> [-o remote]"
+    echo -e "${BLUE}emergency_upload ${NC} <remote> [-o local]"
 }
 
 # emergency_download <remote_file> [-o local_file]
@@ -30,42 +31,48 @@ emergency_download() {
     local REMOTE_FILE="$1"
     local LOCAL_OUT=""
     shift
-
-    # parse optional -o
+    
+    # Parse optional -o parameter
     while getopts "o:" opt; do
         case "$opt" in
             o) LOCAL_OUT="$OPTARG" ;;
-            \?) echo "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2; return 1 ;;
-            :)  echo "${RED}[!]${NC} Missing value for -$OPTARG" >&2; return 1 ;;
+            \?)
+                echo "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2
+                return 1
+                ;;
+            :)
+                echo "${RED}[!]${NC} Missing value for -$OPTARG" >&2
+                return 1
+                ;;
         esac
     done
-
+    
     if [[ -z "$REMOTE_FILE" ]]; then
         echo -e "${RED}[!]${NC} Usage: emergency_download <remote_file> [-o local_file]"
         return 1
     fi
-
-    # default local filename: basename of remote file
+    
+    # Default local filename: basename of remote file
     if [[ -z "$LOCAL_OUT" ]]; then
         LOCAL_OUT="$(basename "$REMOTE_FILE")"
     fi
-
-    # escape single quotes in remote filename for safe single-quoted shell literal:
-    # e.g. file'name -> 'file'"'"'name'
+    
+    # Escape single quotes in remote filename for safe single-quoted shell literal:
+    # e.g., file'name -> 'file'"'"'name'
     local REMOTE_ESCAPED
     REMOTE_ESCAPED=$(printf "%s" "$REMOTE_FILE" | sed "s/'/'\"'\"'/g")
-
-    # build remote command: cat 'remote_file' 2>/dev/null
+    
+    # Build remote command: cat 'remote_file' 2>/dev/null
     local REMOTE_CMD
     REMOTE_CMD="cat '$REMOTE_ESCAPED' 2>/dev/null"
-
+    
     echo -e "${GREEN}[*]${NC} Downloading remote file '$REMOTE_FILE' -> local '$LOCAL_OUT' ..."
-
-    # call send_cmd and stream output to local file
+    
+    # Call send_cmd and stream output to local file
     # Note: send_cmd is expected to write the remote command output to stdout.
     # Using a subshell redirection to capture exit status of send_cmd.
     if send_cmd "$REMOTE_CMD" >"$LOCAL_OUT"; then
-        # quick sanity check: ensure file is non-empty (optional)
+        # Quick sanity check: ensure file is non-empty (optional)
         if [[ -s "$LOCAL_OUT" ]]; then
             local SIZE
             SIZE=$(stat -c%s "$LOCAL_OUT" 2>/dev/null || wc -c <"$LOCAL_OUT")
@@ -89,45 +96,57 @@ emergency_upload() {
     local LOCAL_FILE="$1"
     local REMOTE_FILE=""
     shift
-
+    
+    # Parse optional -o parameter
     while getopts "o:" opt; do
         case "$opt" in
             o) REMOTE_FILE="$OPTARG" ;;
-            \?) echo "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2; return 1 ;;
-            :)  echo "${RED}[!]${NC} Missing value for -$OPTARG" >&2; return 1 ;;
+            \?)
+                echo "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2
+                return 1
+                ;;
+            :)
+                echo "${RED}[!]${NC} Missing value for -$OPTARG" >&2
+                return 1
+                ;;
         esac
     done
-
+    
     if [[ -z "$LOCAL_FILE" ]]; then
         echo -e "${RED}[!]${NC} Usage: emergency_upload <local_file> [-o remote_file]"
         return 1
     fi
+    
     if [[ ! -f "$LOCAL_FILE" ]]; then
         echo -e "${RED}[!]${NC} Local file not found: $LOCAL_FILE"
         return 1
     fi
-
+    
     if [[ -z "$REMOTE_FILE" ]]; then
         REMOTE_FILE="$(basename "$LOCAL_FILE")"
     fi
-
+    
+    # Escape remote filename for safe shell usage
     local REMOTE_ESCAPED
     REMOTE_ESCAPED=$(printf "%s" "$REMOTE_FILE" | sed "s/'/'\"'\"'/g")
-
+    
     echo -e "${GREEN}[*]${NC} Uploading local file '$LOCAL_FILE' -> remote '$REMOTE_FILE' ..."
-
-    # načti obsah a escape
+    
+    # Read file content and escape it for safe shell transmission
     local FILE_CONTENT
     FILE_CONTENT=$(<"$LOCAL_FILE")
     FILE_CONTENT_ESCAPED=$(printf "%s" "$FILE_CONTENT" | sed "s/'/'\\\\''/g")
-
+    
     if send_cmd "printf '%s' '$FILE_CONTENT_ESCAPED' > '$REMOTE_ESCAPED'"; then
+        # Add newline to ensure proper file ending
         send_cmd "echo >> '$REMOTE_ESCAPED'"
+        
+        # Verify upload by comparing file sizes
         local LOCAL_SIZE
         LOCAL_SIZE=$(stat -c%s "$LOCAL_FILE")
         local REMOTE_SIZE
         REMOTE_SIZE=$(send_cmd "ls -l '$REMOTE_ESCAPED' 2>/dev/null | awk '{print \$5}'")
-
+        
         if [[ "$LOCAL_SIZE" -eq "$REMOTE_SIZE" ]]; then
             echo -e "${GREEN}[+]${NC} Upload verified: $REMOTE_FILE ($LOCAL_SIZE bytes)"
             return 0
@@ -141,333 +160,362 @@ emergency_upload() {
     fi
 }
 
-
-# remote_check_b64helper(): vrací název helperu který funguje: base64|openssl|php|python3|python|perl|ruby|none
+# remote_check_b64helper(): returns the name of a working base64 helper
+# Available helpers: base64|openssl|php|python3|python|perl|ruby|xxd_od|none
 remote_check_b64helper() {
-  # prefer builtins
-  if send_cmd "command -v base64 >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
-    echo "base64"
-    return
-  fi
-  if send_cmd "command -v openssl >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
-    echo "openssl"
-    return
-  fi
-  for cmd in php python3 python perl ruby; do
-    if send_cmd "command -v $cmd >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
-      echo "$cmd"
-      return
+    # Prefer built-in tools first
+    if send_cmd "command -v base64 >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
+        echo "base64"
+        return
     fi
-  done
-  if send_cmd "command -v xxd >/dev/null 2>&1 && command -v od >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
-    echo "xxd_od"
-    return
-  fi
-  echo "none"
+    
+    if send_cmd "command -v openssl >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
+        echo "openssl"
+        return
+    fi
+    
+    # Check for scripting language interpreters
+    for cmd in php python3 python perl ruby; do
+        if send_cmd "command -v $cmd >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
+            echo "$cmd"
+            return
+        fi
+    done
+    
+    # Check for xxd+od combination (fallback method)
+    if send_cmd "command -v xxd >/dev/null 2>&1 && command -v od >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
+        echo "xxd_od"
+        return
+    fi
+    
+    echo "none"
 }
 
+# Draw progress bar for file transfer operations
 draw_progress() {
-  local CURRENT="$1" TOTAL="$2"
-  local PERCENT=$((CURRENT * 100 / TOTAL))
-  local FILLED=$((CURRENT * PROGRESS_WIDTH / TOTAL))
-  local EMPTY=$((PROGRESS_WIDTH - FILLED))
-  BAR=$(printf "%0.s#" $(seq 1 $FILLED))$(printf "%0.s." $(seq 1 $EMPTY))
-  printf "\r[%s] %3d%% (%d/%d)" "$BAR" "$PERCENT" "$CURRENT" "$TOTAL"
+    local CURRENT="$1" TOTAL="$2"
+    local PERCENT=$((CURRENT * 100 / TOTAL))
+    local FILLED=$((CURRENT * PROGRESS_WIDTH / TOTAL))
+    local EMPTY=$((PROGRESS_WIDTH - FILLED))
+    BAR=$(printf "%0.s#" $(seq 1 $FILLED))$(printf "%0.s." $(seq 1 $EMPTY))
+    printf "\r[%s] %3d%% (%d/%d)" "$BAR" "$PERCENT" "$CURRENT" "$TOTAL"
 }
 
+# Parallel file upload with chunking and base64 encoding
 parallel_upload() {
-  local LOCAL_FILE="$1"
-  local REMOTE_OUT="$1"
-  local THREADS=8
-  local CHUNK_SIZE=512
-  local REMOTE_B64="upload.b64"
-  local PART_PREFIX="part_"
-  shift
-  while getopts "c:o:t:" opt; do
-    case $opt in
-      c)
-        CHUNK_SIZE="$OPTARG"
-        ;;
-      o)
-        REMOTE_OUT="$OPTARG"
-        ;;
-      t)
-        THREADS="$OPTARG"
-        ;;
-      \?)
-        echo "${RED}[+]${NC} Unknown parameter: -$OPTARG" >&2
+    local LOCAL_FILE="$1"
+    local REMOTE_OUT="$1"
+    local THREADS=8
+    local CHUNK_SIZE=512
+    local REMOTE_B64="upload.b64"
+    local PART_PREFIX="part_"
+    
+    shift
+    # Parse command line options
+    while getopts "c:o:t:" opt; do
+        case $opt in
+            c) CHUNK_SIZE="$OPTARG" ;;
+            o) REMOTE_OUT="$OPTARG" ;;
+            t) THREADS="$OPTARG" ;;
+            \?) echo "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2; return 1 ;;
+            :) echo "${RED}[!]${NC} Bad value for -$OPTARG" >&2; return 1 ;;
+        esac
+    done
+    
+    [[ ! -f "$LOCAL_FILE" ]] && {
+        echo -e "${RED}[!]${NC} Local file not found"
         return 1
-        ;;
-      :)
-        echo "${RED}[+]${NC} Bad value for -$OPTARG" >&2
+    }
+    
+    # Prepare base64 encoded temporary file
+    B64TMP="$(mktemp)"
+    $LOCAL_B64_ENCODE_CMD "$LOCAL_FILE" | tr -d '\n' >"$B64TMP"
+    FILE_SIZE=$(stat -c%s "$B64TMP")
+    echo -e "${GREEN}[*]${NC} Base64 file prepared: $FILE_SIZE bytes"
+    
+    # Calculate total chunks needed
+    TOTAL_CHUNKS=$(((FILE_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE))
+    echo -e "${GREEN}[*]${NC} Splitting into $TOTAL_CHUNKS chunks with $THREADS threads..."
+    
+    # Clean up any existing part files
+    rm -f ${PART_PREFIX}* 2>/dev/null || true
+    
+    # Split the base64 file into chunks by bytes (not lines)
+    split -b "${CHUNK_SIZE}" -d "$B64TMP" "${PART_PREFIX}"
+    
+    # Count actual chunks created
+    ACTUAL_CHUNKS=$(ls ${PART_PREFIX}* 2>/dev/null | wc -l)
+    
+    if [[ $ACTUAL_CHUNKS -eq 0 ]]; then
+        echo -e "${RED}[!]${NC} No chunks created - file might be too small"
+        rm -f "$B64TMP"
         return 1
-        ;;
-    esac
-  done
-
-  [[ ! -f "$LOCAL_FILE" ]] && {
-    echo -e "${RED}[!]${NC} Local file not found"
-    return 1
-  }
-
-  # Příprava base64
-  B64TMP="$(mktemp)"
-  $LOCAL_B64_ENCODE_CMD "$LOCAL_FILE" | tr -d '\n' >"$B64TMP"
-
-  FILE_SIZE=$(stat -c%s "$B64TMP")
-  echo -e "${GREEN}[*]${NC} Base64 file prepared: $FILE_SIZE bytes"
-
-  # Rozdělení na části podle BYTŮ, ne řádků
-  TOTAL_CHUNKS=$(((FILE_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE))
-  echo -e "${GREEN}[*]${NC} Splitting into $TOTAL_CHUNKS chunks with $THREADS threads..."
-
-  # Vytvořit části podle velikosti (bytes), ne počtu řádků
-  split -b "${CHUNK_SIZE}" -d "$B64TMP" "${PART_PREFIX}"
-
-  # Počet skutečně vytvořených částí
-  ACTUAL_CHUNKS=$(ls ${PART_PREFIX}* 2>/dev/null | wc -l)
-  if [[ $ACTUAL_CHUNKS -eq 0 ]]; then
-    echo -e "${RED}[!]${NC} No chunks created - file might be too small"
-    rm -f "$B64TMP"
-    return 1
-  fi
-
-  # Funkce pro upload části
-  upload_chunk() {
-    local chunk_file="$1"
-    local chunk_num=$(echo "$chunk_file" | grep -o '[0-9][0-9]*$')
-    local chunk_content=$(<"$chunk_file")
-
-    # Escape speciálních znaků
-    local escaped_content=$(printf '%s' "$chunk_content" | sed "s/'/'\\\\''/g")
-
-    local cmd=$(printf "printf '%%s' '%s' >> %s.parts" "$escaped_content" "$REMOTE_B64")
-    if send_cmd "$cmd" >/dev/null; then
-      echo -e "${GREEN}[+]${NC} Chunk $chunk_num uploaded"
-      return 0
+    fi
+    
+    # Upload one chunk into its own remote part file
+    upload_chunk() {
+        local chunk_file="$1"
+        local chunk_num=$(echo "$chunk_file" | grep -o '[0-9][0-9]*$')
+        local chunk_content=$(<"$chunk_file")
+        
+        # Complete shell escaping - escape all special characters
+        # 1. Escape backslashes: \ -> \\
+        # 2. Escape single quotes: ' -> '\''
+        # 3. Escape dollar signs: $ -> \$
+        # 4. Escape backticks: ` -> \`
+        # 5. Escape double quotes: " -> \"
+        # 6. Escape ampersands: & -> \&
+        # 7. Escape semicolons: ; -> \;
+        # 8. Escape parentheses: ( -> \(, ) -> \)
+        # 9. Escape asterisks: * -> \*
+        # 10. Escape question marks: ? -> \?
+        # 11. Escape square brackets: [ -> \[, ] -> \]
+        # 12. Escape curly braces: { -> \{, } -> \}
+        local escaped_content=$(printf '%s' "$chunk_content" | sed \
+            -e 's/\\/\\\\/g' \
+            -e "s/'/'\\\\''/g" \
+            -e 's/\$/\\$/g' \
+            -e 's/`/\\`/g' \
+            -e 's/"/\\"/g' \
+            -e 's/&/\\&/g' \
+            -e 's/;/\\;/g' \
+            -e 's/(/\\(/g' \
+            -e 's/)/\\)/g' \
+            -e 's/\*/\\*/g' \
+            -e 's/?/\\?/g' \
+            -e 's/\[/\\[/g' \
+            -e 's/\]/\\]/g' \
+            -e 's/{/\\{/g' \
+            -e 's/}/\\}/g')
+        
+        # Use printf for safer transmission
+        local cmd="printf '%s' '$escaped_content' >> ${REMOTE_B64}.parts"
+        
+        if send_cmd "$cmd" >/dev/null; then
+            echo -e "${GREEN}[+]${NC} Chunk $chunk_num uploaded"
+            return 0
+        else
+            echo -e "${RED}[!]${NC} Failed to upload chunk $chunk_num"
+            return 1
+        fi
+    }
+    
+    # Initialize remote file
+    send_cmd "> ${REMOTE_B64}.parts"
+    
+    # Parallel upload of chunks
+    CURRENT=0
+    for chunk in ${PART_PREFIX}*; do
+        upload_chunk "$chunk" &
+        CURRENT=$((CURRENT + 1))
+        draw_progress "$CURRENT" "$ACTUAL_CHUNKS"
+        
+        # Limit number of concurrent threads
+        if (( $(jobs -r | wc -l) >= THREADS )); then
+            wait -n
+        fi
+    done
+    
+    # Wait for all remaining jobs to complete
+    wait
+    echo
+    
+    # Assemble file on remote system
+    echo -e "${GREEN}[*]${NC} Assembling file on remote system..."
+    send_cmd "$BASE64_DECODE_CMD ${REMOTE_B64}.parts > '$REMOTE_OUT' && rm ${REMOTE_B64}.parts"
+    
+    # Verify upload by comparing file sizes
+    local remote_size=$(send_cmd "ls -l '$REMOTE_OUT' | awk '{print \$5}'")
+    local local_size=$(stat -c%s "$LOCAL_FILE")
+    
+    if [[ "$remote_size" -eq "$local_size" ]]; then
+        echo -e "${GREEN}[+]${NC} Upload verified: $remote_size bytes"
     else
-      echo -e "${RED}[!]${NC} Failed to upload chunk $chunk_num"
-      return 1
+        echo -e "${RED}[!]${NC} Size mismatch: local=$local_size, remote=$remote_size"
     fi
-  }
-
-  # Inicializovat soubor na remote
-  send_cmd "> ${REMOTE_B64}.parts"
-
-  # Paralelní upload
-  CURRENT=0
-  for chunk in ${PART_PREFIX}*; do
-    upload_chunk "$chunk" &
-    CURRENT=$((CURRENT + 1))
-    draw_progress "$CURRENT" "$ACTUAL_CHUNKS"
-
-    # Omezení počtu paralelních procesů
-    if ((CURRENT % THREADS == 0)); then
-      wait
+    
+    # Verify integrity with MD5 checksum
+    echo -e "${GREEN}[*]${NC} Verifying integrity with md5sum..."
+    local remote_md5=$(send_cmd "md5sum '$REMOTE_OUT' | awk '{print \$1}'")
+    local local_md5=$(md5sum "$LOCAL_FILE" | awk '{print $1}')
+    
+    if [[ "$remote_md5" == "$local_md5" ]]; then
+        echo -e "${GREEN}[✓]${NC} MD5 hash match ($local_md5)"
+    else
+        echo -e "${RED}[✗]${NC} MD5 mismatch! Remote: $remote_md5  Local: $local_md5"
     fi
-  done
-  wait
-  echo
-
-  # Složení souboru na cílovém systému
-  echo -e "${GREEN}[*]${NC} Assembling file on remote system..."
-  send_cmd "$BASE64_DECODE_CMD ${REMOTE_B64}.parts > '$REMOTE_OUT' && rm ${REMOTE_B64}.parts"
-
-  # Ověření
-  # Ověření
-  local remote_size=$(send_cmd "ls -l '$REMOTE_OUT' | awk '{print \$5}'")
-  local local_size=$(stat -c%s "$LOCAL_FILE")
-
-  if [[ "$remote_size" -eq "$local_size" ]]; then
-    echo -e "${GREEN}[+]${NC} Upload verified: $remote_size bytes"
-  else
-    echo -e "${RED}[!]${NC} Size mismatch: local=$local_size, remote=$remote_size"
-  fi
-  # Ověření pomocí MD5
-  echo -e "${GREEN}[*]${NC} Verifying integrity with md5sum..."
-  local remote_md5=$(send_cmd "md5sum '$REMOTE_OUT' | awk '{print \$1}'")
-  local local_md5=$(md5sum "$LOCAL_FILE" | awk '{print $1}')
-
-  if [[ "$remote_md5" == "$local_md5" ]]; then
-    echo -e "${GREEN}[✓]${NC} MD5 hash match ($local_md5)"
-  else
-    echo -e "${RED}[✗]${NC} MD5 mismatch! Remote: $remote_md5  Local: $local_md5"
-  fi
-
-  # Úklid
-  rm -f ${PART_PREFIX}* "$B64TMP"
-  echo -e "${GREEN}[+]${NC} Parallel upload finished: $REMOTE_OUT"
+    
+    # Cleanup temporary files
+    rm -f ${PART_PREFIX}* "$B64TMP"
+    echo -e "${GREEN}[+]${NC} Parallel upload finished: $REMOTE_OUT"
 }
 
+# Parallel file download with chunking and base64 decoding
 parallel_download() {
-  local REMOTE_FILE="$1"
-  local LOCAL_OUT="$1"
-  local THREADS=8
-  local CHUNK_SIZE=512
-  local TMP_DIR="$(mktemp -d)"
-  local PART_PREFIX="${TMP_DIR}/part_"
-  shift
-
-  while getopts "c:o:t:" opt; do
-    case $opt in
-      c)
-        CHUNK_SIZE="$OPTARG"
-        ;;
-      o)
-        LOCAL_OUT="$OPTARG"
-        ;;
-      t)
-        THREADS="$OPTARG"
-        ;;
-      \?)
-        echo "${RED}[+] ${NC}Unknown parameter: -$OPTARG" >&2
-        return 1
-        ;;
-      :)
-        echo "${RED}[+] ${NC}Bad value for -$OPTARG" >&2
-        return 1
-        ;;
-    esac
-  done
-
-  # Získat velikost souboru
-  # Získat velikost souboru
-  echo -e "${GREEN}[*]${NC} Getting file size..."
-  FILE_SIZE=$(send_cmd "ls -l '$REMOTE_FILE' | awk '{print \$5}'")
-  #FILE_SIZE=$(echo "$FILE_SIZE" | tr -cd '0-9')
-
-  TOTAL_CHUNKS=$(((FILE_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE))
-  echo -e "${GREEN}[*]${NC} Downloading $FILE_SIZE bytes in $TOTAL_CHUNKS chunks ($THREADS threads)"
-
-  # Funkce pro stažení jednoho chunku (jako base64 text, bez newline)
-  download_chunk() {
-    local chunk_num="$1"
-    local offset=$((chunk_num * CHUNK_SIZE))
-    local count=$((chunk_num < TOTAL_CHUNKS - 1 ? CHUNK_SIZE : FILE_SIZE - offset))
-    local output_file="${PART_PREFIX}${chunk_num}.b64"
-
-    CMD="dd if='$REMOTE_FILE' bs=1 skip=$offset count=$count 2>/dev/null | $BASE64_ENCODE_CMD"
-    RESPONSE=$(send_cmd "$CMD")
-
-    if [[ -n "$RESPONSE" ]]; then
-      echo -n "$RESPONSE" >"$output_file"
-      echo -e "${GREEN}[+]${NC} Chunk $chunk_num OK ($count bytes)"
-      return 0
+    local REMOTE_FILE="$1"
+    local LOCAL_OUT="$1"
+    local THREADS=8
+    local CHUNK_SIZE=512
+    local TMP_DIR="$(mktemp -d)"
+    local PART_PREFIX="${TMP_DIR}/part_"
+    
+    shift
+    
+    # Parse command line options
+    while getopts "c:o:t:" opt; do
+        case $opt in
+            c) CHUNK_SIZE="$OPTARG" ;;
+            o) LOCAL_OUT="$OPTARG" ;;
+            t) THREADS="$OPTARG" ;;
+            \?) echo "${RED}[+] ${NC}Unknown parameter: -$OPTARG" >&2; return 1 ;;
+            :) echo "${RED}[+] ${NC}Bad value for -$OPTARG" >&2; return 1 ;;
+        esac
+    done
+    
+    # Get remote file size
+    echo -e "${GREEN}[*]${NC} Getting file size..."
+    FILE_SIZE=$(send_cmd "ls -l '$REMOTE_FILE' | awk '{print \$5}'")
+    
+    # Calculate total chunks needed
+    TOTAL_CHUNKS=$(((FILE_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE))
+    echo -e "${GREEN}[*]${NC} Downloading $FILE_SIZE bytes in $TOTAL_CHUNKS chunks ($THREADS threads)"
+    
+    # Function to download a single chunk (as base64 text, without newline)
+    download_chunk() {
+        local chunk_num="$1"
+        local offset=$((chunk_num * CHUNK_SIZE))
+        local count=$((chunk_num < TOTAL_CHUNKS - 1 ? CHUNK_SIZE : FILE_SIZE - offset))
+        local output_file="${PART_PREFIX}${chunk_num}.b64"
+        
+        CMD="dd if='$REMOTE_FILE' bs=1 skip=$offset count=$count 2>/dev/null | $BASE64_ENCODE_CMD"
+        RESPONSE=$(send_cmd "$CMD")
+        
+        if [[ -n "$RESPONSE" ]]; then
+            echo -n "$RESPONSE" >"$output_file"
+            echo -e "${GREEN}[+]${NC} Chunk $chunk_num OK ($count bytes)"
+            return 0
+        else
+            echo -e "${RED}[!]${NC} Empty response for chunk $chunk_num"
+            return 1
+        fi
+    }
+    
+    # Parallel download of chunks
+    CURRENT=0
+    for ((chunk_num = 0; chunk_num < TOTAL_CHUNKS; chunk_num++)); do
+        download_chunk "$chunk_num" &
+        CURRENT=$((CURRENT + 1))
+        draw_progress "$CURRENT" "$TOTAL_CHUNKS"
+        
+        # Limit number of concurrent threads
+        if ((CURRENT % THREADS == 0)) || ((chunk_num == TOTAL_CHUNKS - 1)); then
+            wait
+        fi
+    done
+    
+    echo
+    
+    # Assemble base64 data in correct order
+    echo -e "${GREEN}[*]${NC} Assembling base64 data..."
+    for ((i = 0; i < TOTAL_CHUNKS; i++)); do
+        cat "${PART_PREFIX}${i}.b64" >>"${TMP_DIR}/full.b64"
+    done
+    
+    # Decode to final output file
+    $LOCAL_B64_DECODE_CMD "${TMP_DIR}/full.b64" >"$LOCAL_OUT"
+    
+    # Verify final file size
+    local final_size=$(stat -c%s "$LOCAL_OUT" 2>/dev/null || wc -c <"$LOCAL_OUT")
+    if [[ "$final_size" -eq "$FILE_SIZE" ]]; then
+        echo -e "${GREEN}[+]${NC} Size verified: $final_size/$FILE_SIZE bytes"
     else
-      echo -e "${RED}[!]${NC} Empty response for chunk $chunk_num"
-      return 1
+        echo -e "${RED}[!]${NC} Size mismatch: $final_size/$FILE_SIZE bytes"
     fi
-  }
-
-  # Paralelní stahování
-  CURRENT=0
-  for ((chunk_num = 0; chunk_num < TOTAL_CHUNKS; chunk_num++)); do
-    download_chunk "$chunk_num" &
-    CURRENT=$((CURRENT + 1))
-    draw_progress "$CURRENT" "$TOTAL_CHUNKS"
-
-    if ((CURRENT % THREADS == 0)) || ((chunk_num == TOTAL_CHUNKS - 1)); then
-      wait
+    
+    # Verify integrity with MD5 checksum
+    echo -e "${GREEN}[*]${NC} Verifying integrity with md5sum..."
+    local remote_md5=$(send_cmd "md5sum '$REMOTE_FILE' | awk '{print \$1}'")
+    local local_md5=$(md5sum "$LOCAL_OUT" | awk '{print $1}')
+    
+    if [[ "$remote_md5" == "$local_md5" ]]; then
+        echo -e "${GREEN}[✓]${NC} MD5 hash match ($local_md5)"
+    else
+        echo -e "${RED}[✗]${NC} MD5 mismatch! Remote: $remote_md5  Local: $local_md5"
     fi
-  done
-  echo
-
-  # Složení base64 do správného pořadí
-  echo -e "${GREEN}[*]${NC} Assembling base64 data..."
-  for ((i = 0; i < TOTAL_CHUNKS; i++)); do
-    cat "${PART_PREFIX}${i}.b64" >>"${TMP_DIR}/full.b64"
-  done
-
-  # Dekódování do výsledného souboru
-  $LOCAL_B64_DECODE_CMD "${TMP_DIR}/full.b64" >"$LOCAL_OUT"
-
-  # Ověření velikosti
-  local final_size=$(stat -c%s "$LOCAL_OUT" 2>/dev/null || wc -c <"$LOCAL_OUT")
-  if [[ "$final_size" -eq "$FILE_SIZE" ]]; then
-    echo -e "${GREEN}[+]${NC} Size verified: $final_size/$FILE_SIZE bytes"
-  else
-    echo -e "${RED}[!]${NC} Size mismatch: $final_size/$FILE_SIZE bytes"
-  fi
-
-  # Ověření pomocí MD5
-  echo -e "${GREEN}[*]${NC} Verifying integrity with md5sum..."
-  local remote_md5=$(send_cmd "md5sum '$REMOTE_FILE' | awk '{print \$1}'")
-  local local_md5=$(md5sum "$LOCAL_OUT" | awk '{print $1}')
-
-  if [[ "$remote_md5" == "$local_md5" ]]; then
-    echo -e "${GREEN}[✓]${NC} MD5 hash match ($local_md5)"
-  else
-    echo -e "${RED}[✗]${NC} MD5 mismatch! Remote: $remote_md5  Local: $local_md5"
-  fi
-
-  # Úklid
-  rm -rf "$TMP_DIR"
-  echo -e "${GREEN}[+]${NC} Parallel download finished: $LOCAL_OUT"
+    
+    # Cleanup temporary directory
+    rm -rf "$TMP_DIR"
+    echo -e "${GREEN}[+]${NC} Parallel download finished: $LOCAL_OUT"
 }
 
+# Main function to initialize base64 helpers and detect remote capabilities
 eFSiTjxlkn_main() {
-  HELPER="none"
-  B64_INTERPRETER=$(remote_check_b64helper)
-  case "$B64_INTERPRETER" in
-    base64) {
-      BASE64_ENCODE_CMD="base64 -w0"
-      BASE64_DECODE_CMD="base64 -d"
-      HELPER=""
-    } ;;
-    openssl) {
-      BASE64_ENCODE_CMD="./b64helper.sh encode"
-      BASE64_DECODE_CMD="./b64helper.sh decode"
-      HELPER="b64helper.sh"
-    } ;;
-    xxd_od) {
-      BASE64_ENCODE_CMD="./b64helper2.sh encode"
-      BASE64_DECODE_CMD="./b64helper2.sh decode"
-      HELPER="b64helper2.sh"
-    } ;;
-    php) {
-      BASE64_ENCODE_CMD="php ./b64helper.php encode"
-      BASE64_DECODE_CMD="php ./b64helper.php decode"
-      HELPER="b64helper.php"
-    } ;;
-    python3) {
-      BASE64_ENCODE_CMD="python3 ./b64helper.py encode"
-      BASE64_DECODE_CMD="python3 ./b64helper.py decode"
-      HELPER="b64helper.py"
-    } ;;
-    python) {
-      BASE64_ENCODE_CMD="python ./b64helper.py encode"
-      BASE64_DECODE_CMD="python ./b64helper.py decode"
-      HELPER="b64helper.py"
-    } ;;
-    perl) {
-      BASE64_ENCODE_CMD="perl ./b64helper.pl encode"
-      BASE64_DECODE_CMD="perl ./b64helper.pl decode"
-      HELPER="b64helper.pl"
-    } ;;
-    ruby) {
-      BASE64_ENCODE_CMD="ruby ./b64helper.rb encode"
-      BASE64_DECODE_CMD="ruby ./b64helper.rb decode"
-      HELPER="b64helper.rb"
-    } ;;
-    none)
-      echo "$${RED}[+] ${NC}Remote base64 dezection error"
-      exit 1
-      ;;
-  esac
-
-  if [[ "$HELPER" == "xxd_od" ]]; then
-    LOCAL_B64_DECODE_CMD="$BASE64_DECODE_CMD"
-    LOCAL_B64_ENCODE_CMD="$BASE64_ENCODE_CMD"
-  else
-    LOCAL_B64_DECODE_CMD="base64 -d"
-    LOCAL_B64_ENCODE_CMD="base64 -w0"
-  fi
-
-  if [[ -z "$HELPER" ]]; then
-    echo -e "${GREEN}[+] ${NC} Found base64 on remote system no helper is needed..."
-  else
-    echo -e "${GREEN}[+] ${NC} Found $B64_INTERPRETER uploading $HELPER by emergency upload...."
-    emergency_upload "./helpers/$HELPER" "-o" "$HELPER"
-    send_cmd "chmod +x $HELPER"
-  fi
+    HELPER="none"
+    B64_INTERPRETER=$(remote_check_b64helper)
+    
+    # Set appropriate base64 encode/decode commands based on available helpers
+    case "$B64_INTERPRETER" in
+        base64)
+            BASE64_ENCODE_CMD="base64 -w0"
+            BASE64_DECODE_CMD="base64 -d"
+            HELPER=""
+            ;;
+        openssl)
+            BASE64_ENCODE_CMD="./b64helper.sh encode"
+            BASE64_DECODE_CMD="./b64helper.sh decode"
+            HELPER="b64helper.sh"
+            ;;
+        xxd_od)
+            BASE64_ENCODE_CMD="./b64helper2.sh encode"
+            BASE64_DECODE_CMD="./b64helper2.sh decode"
+            HELPER="b64helper2.sh"
+            ;;
+        php)
+            BASE64_ENCODE_CMD="php ./b64helper.php encode"
+            BASE64_DECODE_CMD="php ./b64helper.php decode"
+            HELPER="b64helper.php"
+            ;;
+        python3)
+            BASE64_ENCODE_CMD="python3 ./b64helper.py encode"
+            BASE64_DECODE_CMD="python3 ./b64helper.py decode"
+            HELPER="b64helper.py"
+            ;;
+        python)
+            BASE64_ENCODE_CMD="python ./b64helper.py encode"
+            BASE64_DECODE_CMD="python ./b64helper.py decode"
+            HELPER="b64helper.py"
+            ;;
+        perl)
+            BASE64_ENCODE_CMD="perl ./b64helper.pl encode"
+            BASE64_DECODE_CMD="perl ./b64helper.pl decode"
+            HELPER="b64helper.pl"
+            ;;
+        ruby)
+            BASE64_ENCODE_CMD="ruby ./b64helper.rb encode"
+            BASE64_DECODE_CMD="ruby ./b64helper.rb decode"
+            HELPER="b64helper.rb"
+            ;;
+        none)
+            echo "$${RED}[+] ${NC}Remote base64 detection error"
+            exit 1
+            ;;
+    esac
+    
+    # Set local base64 commands (use system base64 if available)
+    if [[ "$HELPER" == "xxd_od" ]]; then
+        LOCAL_B64_DECODE_CMD="$BASE64_DECODE_CMD"
+        LOCAL_B64_ENCODE_CMD="$BASE64_ENCODE_CMD"
+    else
+        LOCAL_B64_DECODE_CMD="base64 -d"
+        LOCAL_B64_ENCODE_CMD="base64 -w0"
+    fi
+    
+    # Upload helper script if needed
+    if [[ -z "$HELPER" ]]; then
+        echo -e "${GREEN}[+] ${NC} Found base64 on remote system no helper is needed..."
+    else
+        echo -e "${GREEN}[+] ${NC} Found $B64_INTERPRETER uploading $HELPER by emergency upload...."
+        emergency_upload "./helpers/$HELPER" "-o" "$HELPER"
+        send_cmd "chmod +x $HELPER"
+    fi
 }

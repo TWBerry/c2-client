@@ -24,10 +24,10 @@
 #
 
 register_function() {
-local command_name="$1"
-local function_name="$2"
-local param_count="$3"
-local description="$4"
-local row="${command_name} ${function_name} ${param_count} ${description}"$'\n'
-functions_list+=("$row")
+	local command_name="$1"
+	local function_name="$2"
+	local param_count="$3"
+	local description="$4"
+	local row="${command_name} ${function_name} ${param_count} ${description}"$'\n'
+	functions_list+=("$row")
 }
