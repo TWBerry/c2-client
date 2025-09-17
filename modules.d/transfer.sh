@@ -202,15 +202,17 @@ draw_progress() {
 }
 
 # Parallel file upload with chunking and base64 encoding
+# Parallel file upload with chunking and base64 encoding
 parallel_upload() {
     local LOCAL_FILE="$1"
     local REMOTE_OUT="$1"
-    local THREADS=8
-    local CHUNK_SIZE=512
+    local THREADS=4
+    local CHUNK_SIZE=2048
     local REMOTE_B64="upload.b64"
     local PART_PREFIX="part_"
-    
-    shift
+
+    shift  # Remove the first parameter (LOCAL_FILE)
+
     # Parse command line options
     while getopts "c:o:t:" opt; do
         case $opt in
@@ -351,16 +353,17 @@ parallel_upload() {
 }
 
 # Parallel file download with chunking and base64 decoding
+# Parallel file download with chunking and base64 decoding
 parallel_download() {
     local REMOTE_FILE="$1"
     local LOCAL_OUT="$1"
-    local THREADS=8
-    local CHUNK_SIZE=512
+    local THREADS=4
+    local CHUNK_SIZE=2048
     local TMP_DIR="$(mktemp -d)"
     local PART_PREFIX="${TMP_DIR}/part_"
-    
-    shift
-    
+
+    shift  # Remove the first parameter (REMOTE_FILE)
+
     # Parse command line options
     while getopts "c:o:t:" opt; do
         case $opt in
