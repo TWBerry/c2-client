@@ -23,32 +23,8 @@ module_init() {
 #   - strips everything before START and after END to return clean output
 send_cmd() {
         local cmd="$1"
-        # Wrap the command so the remote side prints START and END markers
-        local wrapped_cmd="echo START; $cmd; echo END"
-        local out
         # Use curl to send a GET request with the URL-encoded 'cmd' parameter
-        out=$(curl -s --get --data-urlencode "cmd=$wrapped_cmd" "$URL")
-        # Remove everything before the START marker
-        out="${out#*START}"
-        # Remove everything after the END marker
-        out="${out%%END*}"
-
-        # === Trim leading and trailing newlines only ===
-        # Remove leading newlines
-        while [[ "${out:0:1}" == $'\n' ]]; do
-                out="${out:1}"
-        done
-        # Remove trailing newlines
-        # note: space after : is required for negative index in some bash versions
-        while [[ "${out: -1}" == $'\n' ]]; do
-                out="${out:0:-1}"
-                # if string becomes empty, break to avoid index errors
-                [[ -z "$out" ]] && break
-        done
-
-        # Print the cleaned output (preserve internal newlines).
-        # Using printf ensures predictable behavior with empty strings.
-        printf '%s\n' "$out"
+        curl -s --get --data-urlencode "cmd=$cmd" "$URL"
 }
 
 # module_main: entry point when the module is executed.
@@ -59,7 +35,7 @@ module_main() {
 
 # module_description: short description of the module for listing modules.
 module_description() {
-        echo "Lightweight command execution module using GET requests. Wraps output between START/END markers for clean parsing.For Log-Image-Redis"
+        echo "Lightweight command execution module using GET requests."
 }
 
 # show_module_help: prints usage information for this module.
@@ -69,7 +45,6 @@ Usage: $0 <URL>
 
 Description:
   Sends shell commands via HTTP GET requests.
-  Output is wrapped between START/END markers for reliable extraction.
 
 Arguments:
   URL    Target endpoint URL

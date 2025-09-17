@@ -232,7 +232,7 @@ draw_progress() {
 parallel_upload() {
     local LOCAL_FILE="$1"
     local REMOTE_OUT="$1"
-    local THREADS=4
+    local THREADS=8
     local CHUNK_SIZE=2048
     local REMOTE_B64="upload.b64"
     local PART_PREFIX="part_"
@@ -367,7 +367,7 @@ parallel_upload() {
 parallel_download() {
     local REMOTE_FILE="$1"
     local LOCAL_OUT="$1"
-    local THREADS=4
+    local THREADS=8
     local CHUNK_SIZE=2048
     local TMP_DIR="$(mktemp -d)"
     local PART_PREFIX="${TMP_DIR}/part_"
@@ -576,7 +576,7 @@ if [[ -n "$HELPER_MD5" ]]; then
     emergency_upload "./helpers/$HELPER_MD5" "-o" "$HELPER_MD5"
     send_cmd "chmod +x $HELPER_MD5"
 else
-    echo -e "${GREEN}[+]${NC} Found $MD5_INTERPRETER on remote system no helper is needed."
+    echo -e "${GREEN}[+]${NC} Found $MD5_INTERPRETER on remote system no helper is needed..."
 fi
 
 
