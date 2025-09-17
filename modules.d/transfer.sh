@@ -191,6 +191,32 @@ remote_check_b64helper() {
     echo "none"
 }
 
+# remote_check_md5helper(): returns the name of a working md5 helper
+# Available helpers: md5sum|openssl|php|python3|python|perl|ruby|none
+remote_check_md5helper() {
+    # Prefer md5sum if available
+    if send_cmd "command -v md5sum >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
+        echo "md5sum"
+        return
+    fi
+
+    # OpenSSL fallback
+    if send_cmd "command -v openssl >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
+        echo "openssl"
+        return
+    fi
+
+    # Check scripting languages
+    for cmd in php python3 python perl ruby; do
+        if send_cmd "command -v $cmd >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
+            echo "$cmd"
+            return
+        fi
+    done
+
+    echo "none"
+}
+
 # Draw progress bar for file transfer operations
 draw_progress() {
     local CURRENT="$1" TOTAL="$2"
@@ -212,7 +238,6 @@ parallel_upload() {
     local PART_PREFIX="part_"
 
     shift  # Remove the first parameter (LOCAL_FILE)
-
     # Parse command line options
     while getopts "c:o:t:" opt; do
         case $opt in
@@ -223,56 +248,43 @@ parallel_upload() {
             :) echo "${RED}[!]${NC} Bad value for -$OPTARG" >&2; return 1 ;;
         esac
     done
-    
+
     [[ ! -f "$LOCAL_FILE" ]] && {
         echo -e "${RED}[!]${NC} Local file not found"
         return 1
     }
-    
+
     # Prepare base64 encoded temporary file
     B64TMP="$(mktemp)"
     $LOCAL_B64_ENCODE_CMD "$LOCAL_FILE" | tr -d '\n' >"$B64TMP"
     FILE_SIZE=$(stat -c%s "$B64TMP")
     echo -e "${GREEN}[*]${NC} Base64 file prepared: $FILE_SIZE bytes"
-    
+
     # Calculate total chunks needed
     TOTAL_CHUNKS=$(((FILE_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE))
     echo -e "${GREEN}[*]${NC} Splitting into $TOTAL_CHUNKS chunks with $THREADS threads..."
-    
+
     # Clean up any existing part files
     rm -f ${PART_PREFIX}* 2>/dev/null || true
-    
+
     # Split the base64 file into chunks by bytes (not lines)
     split -b "${CHUNK_SIZE}" -d "$B64TMP" "${PART_PREFIX}"
-    
+
     # Count actual chunks created
     ACTUAL_CHUNKS=$(ls ${PART_PREFIX}* 2>/dev/null | wc -l)
-    
     if [[ $ACTUAL_CHUNKS -eq 0 ]]; then
         echo -e "${RED}[!]${NC} No chunks created - file might be too small"
         rm -f "$B64TMP"
         return 1
     fi
-    
+
     # Upload one chunk into its own remote part file
     upload_chunk() {
         local chunk_file="$1"
         local chunk_num=$(echo "$chunk_file" | grep -o '[0-9][0-9]*$')
         local chunk_content=$(<"$chunk_file")
-        
-        # Complete shell escaping - escape all special characters
-        # 1. Escape backslashes: \ -> \\
-        # 2. Escape single quotes: ' -> '\''
-        # 3. Escape dollar signs: $ -> \$
-        # 4. Escape backticks: ` -> \`
-        # 5. Escape double quotes: " -> \"
-        # 6. Escape ampersands: & -> \&
-        # 7. Escape semicolons: ; -> \;
-        # 8. Escape parentheses: ( -> \(, ) -> \)
-        # 9. Escape asterisks: * -> \*
-        # 10. Escape question marks: ? -> \?
-        # 11. Escape square brackets: [ -> \[, ] -> \]
-        # 12. Escape curly braces: { -> \{, } -> \}
+
+        # Escape special characters for safe printf
         local escaped_content=$(printf '%s' "$chunk_content" | sed \
             -e 's/\\/\\\\/g' \
             -e "s/'/'\\\\''/g" \
@@ -289,10 +301,9 @@ parallel_upload() {
             -e 's/\]/\\]/g' \
             -e 's/{/\\{/g' \
             -e 's/}/\\}/g')
-        
-        # Use printf for safer transmission
-        local cmd="printf '%s' '$escaped_content' >> ${REMOTE_B64}.parts"
-        
+
+        # Save chunk into its own remote part file
+        local cmd="printf '%s' '$escaped_content' > ${REMOTE_B64}.part_${chunk_num}"
         if send_cmd "$cmd" >/dev/null; then
             echo -e "${GREEN}[+]${NC} Chunk $chunk_num uploaded"
             return 0
@@ -301,58 +312,57 @@ parallel_upload() {
             return 1
         fi
     }
-    
-    # Initialize remote file
-    send_cmd "> ${REMOTE_B64}.parts"
-    
+
     # Parallel upload of chunks
     CURRENT=0
     for chunk in ${PART_PREFIX}*; do
         upload_chunk "$chunk" &
         CURRENT=$((CURRENT + 1))
         draw_progress "$CURRENT" "$ACTUAL_CHUNKS"
-        
+
         # Limit number of concurrent threads
         if (( $(jobs -r | wc -l) >= THREADS )); then
             wait -n
         fi
     done
-    
+
     # Wait for all remaining jobs to complete
     wait
     echo
-    
-    # Assemble file on remote system
+
+    # Assemble file on remote system in correct order
     echo -e "${GREEN}[*]${NC} Assembling file on remote system..."
+    send_cmd "cat ${REMOTE_B64}.part_* > ${REMOTE_B64}.parts && rm ${REMOTE_B64}.part_*"
+
+    # Decode to final output
     send_cmd "$BASE64_DECODE_CMD ${REMOTE_B64}.parts > '$REMOTE_OUT' && rm ${REMOTE_B64}.parts"
-    
+
     # Verify upload by comparing file sizes
     local remote_size=$(send_cmd "ls -l '$REMOTE_OUT' | awk '{print \$5}'")
     local local_size=$(stat -c%s "$LOCAL_FILE")
-    
     if [[ "$remote_size" -eq "$local_size" ]]; then
         echo -e "${GREEN}[+]${NC} Upload verified: $remote_size bytes"
     else
         echo -e "${RED}[!]${NC} Size mismatch: local=$local_size, remote=$remote_size"
     fi
-    
+
     # Verify integrity with MD5 checksum
     echo -e "${GREEN}[*]${NC} Verifying integrity with md5sum..."
-    local remote_md5=$(send_cmd "md5sum '$REMOTE_OUT' | awk '{print \$1}'")
+    local remote_md5=$(send_cmd "$MD5_CMD '$REMOTE_OUT' | awk '{print \$1}'")
     local local_md5=$(md5sum "$LOCAL_FILE" | awk '{print $1}')
-    
+
     if [[ "$remote_md5" == "$local_md5" ]]; then
         echo -e "${GREEN}[✓]${NC} MD5 hash match ($local_md5)"
     else
         echo -e "${RED}[✗]${NC} MD5 mismatch! Remote: $remote_md5  Local: $local_md5"
     fi
-    
+
     # Cleanup temporary files
     rm -f ${PART_PREFIX}* "$B64TMP"
     echo -e "${GREEN}[+]${NC} Parallel upload finished: $REMOTE_OUT"
 }
 
-# Parallel file download with chunking and base64 decoding
+
 # Parallel file download with chunking and base64 decoding
 parallel_download() {
     local REMOTE_FILE="$1"
@@ -437,7 +447,7 @@ parallel_download() {
     
     # Verify integrity with MD5 checksum
     echo -e "${GREEN}[*]${NC} Verifying integrity with md5sum..."
-    local remote_md5=$(send_cmd "md5sum '$REMOTE_FILE' | awk '{print \$1}'")
+    local remote_md5=$(send_cmd "$MD5_CMD '$REMOTE_FILE' | awk '{print \$1}'")
     local local_md5=$(md5sum "$LOCAL_OUT" | awk '{print $1}')
     
     if [[ "$remote_md5" == "$local_md5" ]]; then
@@ -521,4 +531,53 @@ eFSiTjxlkn_main() {
         emergency_upload "./helpers/$HELPER" "-o" "$HELPER"
         send_cmd "chmod +x $HELPER"
     fi
+
+MD5_INTERPRETER=$(remote_check_md5helper)
+
+case "$MD5_INTERPRETER" in
+    md5sum)
+        MD5_CMD="md5sum"
+        HELPER_MD5=""
+        ;;
+    openssl)
+        # -r přepne formát na "<hash> <filename>"
+        MD5_CMD="./md5helper.sh"
+        HELPER_MD5=""
+        ;;
+    php)
+        MD5_CMD="php ./md5helper.php"
+        HELPER_MD5="md5helper.php"
+        ;;
+    python3)
+        MD5_CMD="python3 ./md5helper.py"
+        HELPER_MD5="md5helper.py"
+        ;;
+    python)
+        MD5_CMD="python ./md5helper.py"
+        HELPER_MD5="md5helper.py"
+        ;;
+    perl)
+        MD5_CMD="perl ./md5helper.pl"
+        HELPER_MD5="md5helper.pl"
+        ;;
+    ruby)
+        MD5_CMD="ruby ./md5helper.rb"
+        HELPER_MD5="md5helper.rb"
+        ;;
+    none)
+        echo -e "${RED}[!]${NC} Remote MD5 detection error"
+        exit 1
+        ;;
+esac
+
+# Upload helper if needed
+if [[ -n "$HELPER_MD5" ]]; then
+    echo -e "${GREEN}[+]${NC} Found $MD5_INTERPRETER uploading $HELPER_MD5 by emergency upload..."
+    emergency_upload "./helpers/$HELPER_MD5" "-o" "$HELPER_MD5"
+    send_cmd "chmod +x $HELPER_MD5"
+else
+    echo -e "${GREEN}[+]${NC} Found $MD5_INTERPRETER, on remote system no helper is needed."
+fi
+
+
 }
