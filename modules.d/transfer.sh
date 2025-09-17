@@ -525,9 +525,9 @@ eFSiTjxlkn_main() {
     
     # Upload helper script if needed
     if [[ -z "$HELPER" ]]; then
-        echo -e "${GREEN}[+] ${NC} Found base64 on remote system no helper is needed..."
+        echo -e "${GREEN}[+]${NC} Found base64 on remote system no helper is needed..."
     else
-        echo -e "${GREEN}[+] ${NC} Found $B64_INTERPRETER uploading $HELPER by emergency upload...."
+        echo -e "${GREEN}[+]${NC} Found $B64_INTERPRETER uploading $HELPER by emergency upload...."
         emergency_upload "./helpers/$HELPER" "-o" "$HELPER"
         send_cmd "chmod +x $HELPER"
     fi
@@ -576,7 +576,7 @@ if [[ -n "$HELPER_MD5" ]]; then
     emergency_upload "./helpers/$HELPER_MD5" "-o" "$HELPER_MD5"
     send_cmd "chmod +x $HELPER_MD5"
 else
-    echo -e "${GREEN}[+]${NC} Found $MD5_INTERPRETER, on remote system no helper is needed."
+    echo -e "${GREEN}[+]${NC} Found $MD5_INTERPRETER on remote system no helper is needed."
 fi
 
 

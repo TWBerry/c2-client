@@ -125,15 +125,3 @@ network_summary() {
 	network_config
 	network_tools
 }
-
-# --- small utilities / low-level fallbacks (examples) -----------------------
-# Example: minimal TCP port check with /dev/tcp (if shell supports it)
-# Usage: check_tcp_host_port host port
-check_tcp_host_port() {
-	local host="$1"
-	local port="$2"
-	# Redirect stdout/stderr to /dev/null for quiet check, return 0 if connectable
-	(exec 3>/dev/tcp/"$host"/"$port") >/dev/null 2>&1 && echo "OPEN: $host:$port" || echo "CLOSED: $host:$port"
-}
-
-# End of module
