@@ -175,7 +175,7 @@ remote_check_b64helper() {
   fi
 
   # Check for scripting language interpreters
-  for cmd in php python3 python perl ruby; do
+  for cmd in awk php python3 python perl ruby; do
     if send_cmd "command -v $cmd >/dev/null 2>&1 && echo yes || echo no" | grep -q yes; then
       echo "$cmd"
       return
@@ -255,11 +255,11 @@ parallel_upload() {
       o) REMOTE_OUT="$OPTARG" ;;
       t) THREADS="$OPTARG" ;;
       \?)
-        echo "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2
+        echo -e "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2
         return 1
         ;;
       :)
-        echo "${RED}[!]${NC} Bad value for -$OPTARG" >&2
+        echo -e "${RED}[!]${NC} Bad value for -$OPTARG" >&2
         return 1
         ;;
     esac
@@ -300,32 +300,17 @@ parallel_upload() {
     local chunk_num=$(echo "$chunk_file" | grep -o '[0-9][0-9]*$')
     local chunk_content=$(<"$chunk_file")
 
-    # Escape special characters for safe printf
-    local escaped_content=$(printf '%s' "$chunk_content" | sed \
-      -e 's/\\/\\\\/g' \
-      -e "s/'/'\\\\''/g" \
-      -e 's/\$/\\$/g' \
-      -e 's/`/\\`/g' \
-      -e 's/"/\\"/g' \
-      -e 's/&/\\&/g' \
-      -e 's/;/\\;/g' \
-      -e 's/(/\\(/g' \
-      -e 's/)/\\)/g' \
-      -e 's/\*/\\*/g' \
-      -e 's/?/\\?/g' \
-      -e 's/\[/\\[/g' \
-      -e 's/\]/\\]/g' \
-      -e 's/{/\\{/g' \
-      -e 's/}/\\}/g')
+    # Only escape single quotes for safe embedding inside '...'
+    local escaped_content=$(printf "%s" "$chunk_content" | sed "s/'/'\\\\''/g")
 
     # Save chunk into its own remote part file
     local cmd="printf '%s' '$escaped_content' > ${REMOTE_B64}.part_${chunk_num}"
     if send_cmd "$cmd" >/dev/null; then
-      echo -e "${GREEN}[+]${NC} Chunk $chunk_num uploaded"
-      return 0
+        echo -e "${GREEN}[+]${NC} Chunk $chunk_num uploaded"
+        return 0
     else
-      echo -e "${RED}[!]${NC} Failed to upload chunk $chunk_num"
-      return 1
+        echo -e "${RED}[!]${NC} Failed to upload chunk $chunk_num"
+        return 1
     fi
   }
 
@@ -513,6 +498,11 @@ eFSiTjxlkn_main() {
       BASE64_ENCODE_CMD="./b64helper2.sh encode"
       BASE64_DECODE_CMD="./b64helper2.sh decode"
       HELPER="b64helper2.sh"
+      ;;
+    awk)
+      BASE64_ENCODE_CMD="awk -f ./b64helper.awk encode"
+      BASE64_DECODE_CMD="awk -f ./b64helper.awk decode"
+      HELPER="b64helper.awk"
       ;;
     php)
       BASE64_ENCODE_CMD="php ./b64helper.php encode"

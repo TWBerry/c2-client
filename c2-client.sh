@@ -120,9 +120,12 @@ assemble_main_loop() {
   main_loop_command+='done'$'\n'
 }
 
-show_help() {
+show_help2() {
   echo -e "${BLUE}C2 Client version v$VERSION${NC}"
   echo -e "Usage: $0 <shell_module> <url> [shell_module_args]"
+}
+
+show_help() {
   show_module_help
   local list=$(cat modules)
   for line in $list; do
@@ -136,7 +139,7 @@ show_help() {
 }
 
 if [[ "$#" -eq 0 || "$1" == "--help" || "$1" == "-h" ]]; then
-  show_help
+  show_help2
   exit 0
 fi
 

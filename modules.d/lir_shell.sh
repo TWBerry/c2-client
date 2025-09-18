@@ -65,7 +65,7 @@ module_description() {
 # show_module_help: prints usage information for this module.
 show_module_help() {
   cat <<EOF
-Usage: $0 <URL>
+Usage: $0 lir_shell <URL>
 
 Description:
   Sends shell commands via HTTP GET requests.

@@ -108,7 +108,7 @@ module_description() {
 show_module_help() {
   cat <<EOF
 Encrypted shell module
-Usage: $0 <URL> [-u user_agents_file] [-i interval] [-k hmac_key]
+Usage: $0 encrypted_shell <URL> [-u user_agents_file] [-i interval] [-k hmac_key]
 Description:
   Sends encrypted commands over HTTP using AES-128-ECB with a time-based key.
   Each command is additionally protected with HMAC-SHA256.
