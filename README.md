@@ -85,7 +85,7 @@ Where:
 
 * `command_name` = the command string used in the C2 shell
 * `function_name` = Bash function name implemented in the module
-* `param_count` = number of parameters expected (0 = variable)
+* `param_count` = number of parameters expected 
 * `Description` = short help text
 
 ## Module Management (module.sh)

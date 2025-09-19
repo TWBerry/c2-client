@@ -37,11 +37,11 @@ emergency_download() {
     case "$opt" in
       o) LOCAL_OUT="$OPTARG" ;;
       \?)
-        echo "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2
+        echo -e "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2
         return 1
         ;;
       :)
-        echo "${RED}[!]${NC} Missing value for -$OPTARG" >&2
+        echo -e "${RED}[!]${NC} Missing value for -$OPTARG" >&2
         return 1
         ;;
     esac
@@ -102,11 +102,11 @@ emergency_upload() {
     case "$opt" in
       o) REMOTE_FILE="$OPTARG" ;;
       \?)
-        echo "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2
+        echo -e "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2
         return 1
         ;;
       :)
-        echo "${RED}[!]${NC} Missing value for -$OPTARG" >&2
+        echo -e "${RED}[!]${NC} Missing value for -$OPTARG" >&2
         return 1
         ;;
     esac
@@ -530,7 +530,7 @@ eFSiTjxlkn_main() {
       HELPER="b64helper.rb"
       ;;
     none)
-      echo "$${RED}[+] ${NC}Remote base64 detection error"
+      echo -e "$${RED}[+] ${NC}Remote base64 detection error"
       return 1
       ;;
   esac
@@ -561,7 +561,6 @@ eFSiTjxlkn_main() {
       HELPER_MD5=""
       ;;
     openssl)
-      # -r přepne formát na "<hash> <filename>"
       MD5_CMD="./md5helper.sh"
       HELPER_MD5="md5helper.sh"
       ;;
