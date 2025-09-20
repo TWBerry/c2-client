@@ -7,9 +7,11 @@
 #   -i <interval>          : synchronization interval (seconds) for time-based AES key
 #   -k <hmac_key>          : HMAC secret key used to sign encrypted payloads
 # The function validates inputs and loads user agents into USER_AGENTS array.
+source "funcmgr.sh"
+
 module_init() {
   URL="$1"
-
+ 
   # Ensure URL was provided
   if [[ -z "$URL" ]]; then
     echo "[!] shell_module_init: URL must be provided"
@@ -22,7 +24,6 @@ module_init() {
   HMAC_KEY="secretkey"
 
   shift
-
   # Parse optional flags -u, -i, -k
   while getopts "u:i:k:" opt; do
     case $opt in

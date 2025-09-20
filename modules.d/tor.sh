@@ -9,6 +9,17 @@ uONYoUDBwv_init() {
   register_function "disable_tor" "disable_tor" "0" 'Disable tor socks proxy'
   register_function "show_ip" "show_ip" "0" "Show public IP"
   register_function "change_ip" "change_ip" "2" "Request new Tor identity"
+  register_cmdline_param "--no-tor" "disable_tor_startup" "enable_tor_startup"
+}
+
+disable_tor_startup() {
+  unset ALL_PROXY 2>/dev/null || true
+  echo -e "${YELLOW}[!]${NC} Tor proxy disabled at startup"
+}
+
+enable_tor_startup() {
+  export ALL_PROXY="socks5://127.0.0.1:9050"
+  echo -e "${GREEN}[+]${NC} Tor proxy enabled at startup (use --no-tor to disable)"
 }
 
 uONYoUDBwv_main() {
@@ -16,7 +27,7 @@ uONYoUDBwv_main() {
 }
 
 uONYoUDBwv_description() {
-  echo "Tor module"
+  echo "Tor module with command-line control"
 }
 
 uONYoUDBwv_help() {
@@ -24,6 +35,7 @@ uONYoUDBwv_help() {
   echo -e "${BLUE}disable_tor${NC} disable tor socks proxy"
   echo -e "${BLUE}show_ip${NC} show public ip (uses Tor proxy if enabled)"
   echo -e "${BLUE}change_ip${NC} change Tor exit IP (options: -c cookie_path | -p password)"
+  echo -e "${BLUE}--no-tor${NC} command-line argument to disable Tor proxy at startup"
 }
 
 enable_tor() {

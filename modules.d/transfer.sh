@@ -306,11 +306,11 @@ parallel_upload() {
     # Save chunk into its own remote part file
     local cmd="printf '%s' '$escaped_content' > ${REMOTE_B64}.part_${chunk_num}"
     if send_cmd "$cmd" >/dev/null; then
-        echo -e "${GREEN}[+]${NC} Chunk $chunk_num uploaded"
-        return 0
+      echo -e "${GREEN}[+]${NC} Chunk $chunk_num uploaded"
+      return 0
     else
-        echo -e "${RED}[!]${NC} Failed to upload chunk $chunk_num"
-        return 1
+      echo -e "${RED}[!]${NC} Failed to upload chunk $chunk_num"
+      return 1
     fi
   }
 

