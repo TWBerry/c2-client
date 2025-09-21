@@ -105,7 +105,7 @@ show_ip() {
     print_err "Could not determine IP (curl failed)."
     return 1
   fi
-  echo -e "${GREEN}[+]${NC} Public IP: ${BLUE}$ip${NC}"
+  print_std "Public IP: ${BLUE}$ip${NC}"
   return 0
 }
 
@@ -219,7 +219,7 @@ change_ip() {
     # read response
     IFS= read -r resp || true
     if [[ "$resp" =~ ^250 ]]; then
-      print_std "Tor accepted NEWNYM command (response: $resp)"
+      print_std "Tor accepted NEWNYM command response: $resp"
     else
       print_warn "Tor ControlPort responded: $resp"
       # still continue to wait — sometimes ControlPort returns different messages but NEWNYM may still take effect
@@ -237,7 +237,7 @@ change_ip() {
     waited=$((waited + 3))
     new_ip="$(_get_ip_via_tor_or_direct)" || new_ip=""
     if [[ -n "$new_ip" && "$new_ip" != "$old_ip" ]]; then
-      echo -e "${GREEN}[+]${NC} New IP: ${BLUE}$new_ip${NC}"
+    print_std "New IP: ${BLUE}$new_ip${NC}"
       return 0
     fi
   done

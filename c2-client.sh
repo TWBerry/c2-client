@@ -5,6 +5,8 @@ HISTORY_FILE="${HOME}/.c2_client_history"
 export HISTFILE="$HISTORY_FILE"
 export HISTSIZE=1000
 export HISTFILESIZE=2000
+# Always flush history on exit
+trap 'history -a 2>/dev/null || true' EXIT
 
 # Color definitions for output formatting
 RED='\033[0;31m'
@@ -70,7 +72,8 @@ read_with_history() {
         read -rp "$user@$hostname>" line
     fi
     
-    echo "$line"
+    READ_LINE="$line"
+    return 0
 }
 
 # Print available command list with descriptions
@@ -195,10 +198,10 @@ assemble_main_loop() {
   echo -e "${GREEN}[+]${NC} Assembling main loop..."
   main_loop_command+='while true; do'$'\n'
   main_loop_command+='  echo -ne "${BLUE}"'$'\n'
-  main_loop_command+='  LINE=$(read_with_history)'$'\n'
+  main_loop_command+='  read_with_history'$'\n'
+  main_loop_command+='  LINE="$READ_LINE"'$'\n'
   main_loop_command+='  echo -ne "${NC}"'$'\n'
   main_loop_command+='  [[ "$LINE" == "exit" ]] && break'$'\n'
-  #main_loop_command+='  save_to_history "$LINE" '$'\n'
   main_loop_command+='  set -- $LINE'$'\n'
   main_loop_command+='  case "$1" in'$'\n'
 
