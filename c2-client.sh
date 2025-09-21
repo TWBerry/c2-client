@@ -298,8 +298,8 @@ fi
 # Initialize the module and start the main program
 
 load_modules
-remaining_args=$(process_cmdline_params "$@")
-module_init $remaining_args
+process_cmdline_params "$@"
+module_init "${CMDLINE_REMAINING[@]}"
 echo -e "${GREEN}[+] ${NC}Loaded shell module: $SHELL_MODULE_NAME"
 module_description
 assemble_main_loop

@@ -4,7 +4,27 @@
 #File transfer module
 
 source funcmgr.sh
-PROGRESS_WIDTH=25
+
+print_warn() {
+  echo -e "${YELLOW}[!]${NC} $1" >&2
+}
+
+print_err() {
+  echo -e "${RED}[!]${NC} $1" >&2
+}
+print_std() {
+  echo -e "${GREEN}[+]${NC} $1"
+}
+
+print_help() {
+  echo -e "${BLUE}$1${NC} $2"
+}
+
+print_out() {
+  echo -e "${GREEN}[+]${YELLOW} $1${NC}"
+}
+
+PROGRESS_WIDTH=35
 
 eFSiTjxlkn_init() {
   register_function "download" "parallel_download" 7 "Download a file"
@@ -18,10 +38,10 @@ eFSiTjxlkn_description() {
 }
 
 eFSiTjxlkn_help() {
-  echo -e "${BLUE}download ${NC}<remote> [-c chunk_size] [-o local] [-t threads]"
-  echo -e "${BLUE}upload ${NC}<local> [-c chunk_size] [-o remote] [-t threads]"
-  echo -e "${BLUE}emergency_upload ${NC}<local> [-o remote]"
-  echo -e "${BLUE}emergency_upload ${NC} <remote> [-o local]"
+  print_help "download" "<remote> [-c chunk_size] [-o local] [-t threads]"
+  print_help "upload" "<local> [-c chunk_size] [-o remote] [-t threads]"
+  print_help "emergency_upload" "<local> [-o remote]"
+  print_help "emergency_upload" "<remote> [-o local]"
 }
 
 # emergency_download <remote_file> [-o local_file]
@@ -37,18 +57,18 @@ emergency_download() {
     case "$opt" in
       o) LOCAL_OUT="$OPTARG" ;;
       \?)
-        echo -e "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2
+        print_err "Unknown parameter: -$OPTARG"
         return 1
         ;;
       :)
-        echo -e "${RED}[!]${NC} Missing value for -$OPTARG" >&2
+        print_err "Missing value for -$OPTARG"
         return 1
         ;;
     esac
   done
 
   if [[ -z "$REMOTE_FILE" ]]; then
-    echo -e "${RED}[!]${NC} Usage: emergency_download <remote_file> [-o local_file]"
+    print_err "Usage: emergency_download <remote_file> [-o local_file]"
     return 1
   fi
 
@@ -66,7 +86,7 @@ emergency_download() {
   local REMOTE_CMD
   REMOTE_CMD="cat '$REMOTE_ESCAPED' 2>/dev/null"
 
-  echo -e "${GREEN}[*]${NC} Downloading remote file '$REMOTE_FILE' -> local '$LOCAL_OUT' ..."
+  print_std "Downloading remote file '$REMOTE_FILE' -> local '$LOCAL_OUT' ..."
 
   # Call send_cmd and stream output to local file
   # Note: send_cmd is expected to write the remote command output to stdout.
@@ -76,14 +96,14 @@ emergency_download() {
     if [[ -s "$LOCAL_OUT" ]]; then
       local SIZE
       SIZE=$(stat -c%s "$LOCAL_OUT" 2>/dev/null || wc -c <"$LOCAL_OUT")
-      echo -e "${GREEN}[+]${NC} Download complete: $LOCAL_OUT ($SIZE bytes)"
+      print_std "Download complete: $LOCAL_OUT ($SIZE bytes)"
       return 0
     else
-      echo -e "${RED}[!]${NC} Download produced empty file: $LOCAL_OUT"
+      print_err "Download produced empty file: $LOCAL_OUT"
       return 2
     fi
   else
-    echo -e "${RED}[!]${NC} send_cmd failed while attempting to cat remote file"
+    print_err "send_cmd failed while attempting to cat remote file"
     rm -f "$LOCAL_OUT" 2>/dev/null || true
     return 3
   fi
@@ -102,23 +122,23 @@ emergency_upload() {
     case "$opt" in
       o) REMOTE_FILE="$OPTARG" ;;
       \?)
-        echo -e "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2
+        print_err "Unknown parameter: -$OPTARG"
         return 1
         ;;
       :)
-        echo -e "${RED}[!]${NC} Missing value for -$OPTARG" >&2
+        print_err "Missing value for -$OPTARG"
         return 1
         ;;
     esac
   done
 
   if [[ -z "$LOCAL_FILE" ]]; then
-    echo -e "${RED}[!]${NC} Usage: emergency_upload <local_file> [-o remote_file]"
+    print_err "Usage: emergency_upload <local_file> [-o remote_file]"
     return 1
   fi
 
   if [[ ! -f "$LOCAL_FILE" ]]; then
-    echo -e "${RED}[!]${NC} Local file not found: $LOCAL_FILE"
+    print_err "Local file not found: $LOCAL_FILE"
     return 1
   fi
 
@@ -130,7 +150,7 @@ emergency_upload() {
   local REMOTE_ESCAPED
   REMOTE_ESCAPED=$(printf "%s" "$REMOTE_FILE" | sed "s/'/'\"'\"'/g")
 
-  echo -e "${GREEN}[*]${NC} Uploading local file '$LOCAL_FILE' -> remote '$REMOTE_FILE' ..."
+  print_std "Uploading local file '$LOCAL_FILE' -> remote '$REMOTE_FILE' ..."
 
   # Read file content and escape it for safe shell transmission
   local FILE_CONTENT
@@ -148,14 +168,14 @@ emergency_upload() {
     REMOTE_SIZE=$(send_cmd "ls -l '$REMOTE_ESCAPED' 2>/dev/null | awk '{print \$5}'")
 
     if [[ "$LOCAL_SIZE" -eq "$REMOTE_SIZE" ]]; then
-      echo -e "${GREEN}[+]${NC} Upload verified: $REMOTE_FILE ($LOCAL_SIZE bytes)"
+      print_std "Upload verified: $REMOTE_FILE ($LOCAL_SIZE bytes)"
       return 0
     else
-      echo -e "${RED}[!]${NC} Size mismatch: local=$LOCAL_SIZE, remote=$REMOTE_SIZE"
+      print_err "Size mismatch: local=$LOCAL_SIZE, remote=$REMOTE_SIZE"
       return 3
     fi
   else
-    echo -e "${RED}[!]${NC} send_cmd failed while attempting to upload"
+    print_err "send_cmd failed while attempting to upload"
     return 2
   fi
 }
@@ -238,12 +258,12 @@ parallel_upload() {
   local PART_PREFIX="part_"
 
   if [[ "$HELPER" == "none" ]]; then
-    echo -e "${RED}[+] ${NC} No remote base64 helper. Upload stopped..."
+    print_err "No remote base64 helper. Upload stopped..."
     return 1
   fi
 
   if [[ "$HELPER_MD5" == "none" ]]; then
-    echo -e "${RED}[+] ${NC}No remote md5sum helper found. Upload stopped..."
+    print_err "No remote md5sum helper found. Upload stopped..."
     return 1
   fi
 
@@ -255,18 +275,18 @@ parallel_upload() {
       o) REMOTE_OUT="$OPTARG" ;;
       t) THREADS="$OPTARG" ;;
       \?)
-        echo -e "${RED}[!]${NC} Unknown parameter: -$OPTARG" >&2
+        print_err "Unknown parameter: -$OPTARG"
         return 1
         ;;
       :)
-        echo -e "${RED}[!]${NC} Bad value for -$OPTARG" >&2
+        print_err "Bad value for -$OPTARG"
         return 1
         ;;
     esac
   done
 
   [[ ! -f "$LOCAL_FILE" ]] && {
-    echo -e "${RED}[!]${NC} Local file not found"
+    print_err "Local file not found"
     return 1
   }
 
@@ -274,11 +294,11 @@ parallel_upload() {
   B64TMP="$(mktemp)"
   $LOCAL_B64_ENCODE_CMD "$LOCAL_FILE" | tr -d '\n' >"$B64TMP"
   FILE_SIZE=$(stat -c%s "$B64TMP")
-  echo -e "${GREEN}[*]${NC} Base64 file prepared: $FILE_SIZE bytes"
+  print_std "Base64 file prepared: $FILE_SIZE bytes"
 
   # Calculate total chunks needed
   TOTAL_CHUNKS=$(((FILE_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE))
-  echo -e "${GREEN}[*]${NC} Splitting into $TOTAL_CHUNKS chunks with $THREADS threads..."
+  print_std "Splitting into $TOTAL_CHUNKS chunks with $THREADS threads..."
 
   # Clean up any existing part files
   rm -f ${PART_PREFIX}* 2>/dev/null || true
@@ -289,7 +309,7 @@ parallel_upload() {
   # Count actual chunks created
   ACTUAL_CHUNKS=$(ls ${PART_PREFIX}* 2>/dev/null | wc -l)
   if [[ $ACTUAL_CHUNKS -eq 0 ]]; then
-    echo -e "${RED}[!]${NC} No chunks created - file might be too small"
+    print_err "No chunks created - file might be too small"
     rm -f "$B64TMP"
     return 1
   fi
@@ -306,10 +326,10 @@ parallel_upload() {
     # Save chunk into its own remote part file
     local cmd="printf '%s' '$escaped_content' > ${REMOTE_B64}.part_${chunk_num}"
     if send_cmd "$cmd" >/dev/null; then
-      echo -e "${GREEN}[+]${NC} Chunk $chunk_num uploaded"
+      #print_std "Chunk $chunk_num uploaded"
       return 0
     else
-      echo -e "${RED}[!]${NC} Failed to upload chunk $chunk_num"
+      print_err "Failed to upload chunk $chunk_num"
       return 1
     fi
   }
@@ -332,7 +352,7 @@ parallel_upload() {
   echo
 
   # Assemble file on remote system in correct order
-  echo -e "${GREEN}[*]${NC} Assembling file on remote system..."
+  print_std "Assembling file on remote system..."
   send_cmd "cat ${REMOTE_B64}.part_* > ${REMOTE_B64}.parts && rm ${REMOTE_B64}.part_*"
 
   # Decode to final output
@@ -342,25 +362,25 @@ parallel_upload() {
   local remote_size=$(send_cmd "ls -l '$REMOTE_OUT' | awk '{print \$5}'")
   local local_size=$(stat -c%s "$LOCAL_FILE")
   if [[ "$remote_size" -eq "$local_size" ]]; then
-    echo -e "${GREEN}[+]${NC} Upload verified: $remote_size bytes"
+    print_std "Upload verified: $remote_size bytes"
   else
-    echo -e "${RED}[!]${NC} Size mismatch: local=$local_size, remote=$remote_size"
+    print_err "Size mismatch: local=$local_size, remote=$remote_size"
   fi
 
   # Verify integrity with MD5 checksum
-  echo -e "${GREEN}[*]${NC} Verifying integrity with md5sum..."
+  print_std "Verifying integrity with md5sum..."
   local remote_md5=$(send_cmd "$MD5_CMD '$REMOTE_OUT' | awk '{print \$1}'")
   local local_md5=$(md5sum "$LOCAL_FILE" | awk '{print $1}')
 
   if [[ "$remote_md5" == "$local_md5" ]]; then
-    echo -e "${GREEN}[✓]${NC} MD5 hash match ($local_md5)"
+    print_std "MD5 hash match ($local_md5)"
   else
-    echo -e "${RED}[✗]${NC} MD5 mismatch! Remote: $remote_md5  Local: $local_md5"
+    print_err "MD5 mismatch! Remote: $remote_md5  Local: $local_md5"
   fi
 
   # Cleanup temporary files
   rm -f ${PART_PREFIX}* "$B64TMP"
-  echo -e "${GREEN}[+]${NC} Parallel upload finished: $REMOTE_OUT"
+  print_std "Parallel upload finished: $REMOTE_OUT"
 }
 
 # Parallel file download with chunking and base64 decoding
@@ -375,12 +395,12 @@ parallel_download() {
   shift # Remove the first parameter (REMOTE_FILE)
 
   if [[ "$HELPER" == "none" ]]; then
-    echo -e "${RED}[+] ${NC} No remote base64 helper. Download stopped..."
+    print_err "No remote base64 helper. Download stopped..."
     return 1
   fi
 
   if [[ "$HELPER_MD5" == "none" ]]; then
-    echo -e "${RED}[+] ${NC}No remote md5sum helper found. Download stopped..."
+    print_err "No remote md5sum helper found. Download stopped..."
     return 1
   fi
 
@@ -391,23 +411,23 @@ parallel_download() {
       o) LOCAL_OUT="$OPTARG" ;;
       t) THREADS="$OPTARG" ;;
       \?)
-        echo -e "${RED}[+] ${NC}Unknown parameter: -$OPTARG" >&2
+        print_err "Unknown parameter: -$OPTARG"
         return 1
         ;;
       :)
-        echo -e "${RED}[+] ${NC}Bad value for -$OPTARG" >&2
+        print_err "Bad value for -$OPTARG"
         return 1
         ;;
     esac
   done
 
   # Get remote file size
-  echo -e "${GREEN}[*]${NC} Getting file size..."
+  print_std "Getting file size..."
   FILE_SIZE=$(send_cmd "ls -l '$REMOTE_FILE' | awk '{print \$5}'")
 
   # Calculate total chunks needed
   TOTAL_CHUNKS=$(((FILE_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE))
-  echo -e "${GREEN}[*]${NC} Downloading $FILE_SIZE bytes in $TOTAL_CHUNKS chunks ($THREADS threads)"
+  print_std "Downloading $FILE_SIZE bytes in $TOTAL_CHUNKS chunks ($THREADS threads)"
 
   # Function to download a single chunk (as base64 text, without newline)
   download_chunk() {
@@ -421,10 +441,10 @@ parallel_download() {
 
     if [[ -n "$RESPONSE" ]]; then
       echo -n "$RESPONSE" >"$output_file"
-      echo -e "${GREEN}[+]${NC} Chunk $chunk_num OK ($count bytes)"
+      #print_std "$Chunk $chunk_num OK ($count bytes)"
       return 0
     else
-      echo -e "${RED}[!]${NC} Empty response for chunk $chunk_num"
+      print_err "Empty response for chunk $chunk_num"
       return 1
     fi
   }
@@ -445,7 +465,7 @@ parallel_download() {
   echo
 
   # Assemble base64 data in correct order
-  echo -e "${GREEN}[*]${NC} Assembling base64 data..."
+  print_std "Assembling base64 data..."
   for ((i = 0; i < TOTAL_CHUNKS; i++)); do
     cat "${PART_PREFIX}${i}.b64" >>"${TMP_DIR}/full.b64"
   done
@@ -456,25 +476,25 @@ parallel_download() {
   # Verify final file size
   local final_size=$(stat -c%s "$LOCAL_OUT" 2>/dev/null || wc -c <"$LOCAL_OUT")
   if [[ "$final_size" -eq "$FILE_SIZE" ]]; then
-    echo -e "${GREEN}[+]${NC} Size verified: $final_size/$FILE_SIZE bytes"
+    print_std "Size verified: $final_size/$FILE_SIZE bytes"
   else
-    echo -e "${RED}[!]${NC} Size mismatch: $final_size/$FILE_SIZE bytes"
+    print_err "Size mismatch: $final_size/$FILE_SIZE bytes"
   fi
 
   # Verify integrity with MD5 checksum
-  echo -e "${GREEN}[*]${NC} Verifying integrity with md5sum..."
+  print_std "Verifying integrity with md5sum..."
   local remote_md5=$(send_cmd "$MD5_CMD '$REMOTE_FILE' | awk '{print \$1}'")
   local local_md5=$(md5sum "$LOCAL_OUT" | awk '{print $1}')
 
   if [[ "$remote_md5" == "$local_md5" ]]; then
-    echo -e "${GREEN}[✓]${NC} MD5 hash match ($local_md5)"
+    print_std "MD5 hash match ($local_md5)"
   else
-    echo -e "${RED}[✗]${NC} MD5 mismatch! Remote: $remote_md5  Local: $local_md5"
+    print_err "MD5 mismatch! Remote: $remote_md5  Local: $local_md5"
   fi
 
   # Cleanup temporary directory
   rm -rf "$TMP_DIR"
-  echo -e "${GREEN}[+]${NC} Parallel download finished: $LOCAL_OUT"
+  print_std "Parallel download finished: $LOCAL_OUT"
 }
 
 # Main function to initialize base64 helpers and detect remote capabilities
@@ -530,7 +550,7 @@ eFSiTjxlkn_main() {
       HELPER="b64helper.rb"
       ;;
     none)
-      echo -e "$${RED}[+] ${NC}Remote base64 detection error"
+      pint_ert "Remote base64 detection error"
       return 1
       ;;
   esac
@@ -546,9 +566,9 @@ eFSiTjxlkn_main() {
 
   # Upload helper script if needed
   if [[ -z "$HELPER" ]]; then
-    echo -e "${GREEN}[+]${NC} Found base64 on remote system no helper is needed..."
+    print_std "Found base64 on remote system no helper is needed..."
   else
-    echo -e "${GREEN}[+]${NC} Found $B64_INTERPRETER uploading $HELPER by emergency upload...."
+    print_std "Found $B64_INTERPRETER uploading $HELPER by emergency upload...."
     emergency_upload "./helpers/$HELPER" "-o" "$HELPER"
     send_cmd "chmod +x $HELPER"
   fi
@@ -585,7 +605,7 @@ eFSiTjxlkn_main() {
       HELPER_MD5="md5helper.rb"
       ;;
     none)
-      echo -e "${RED}[!]${NC} Remote MD5 detection error"
+      print_err "Remote MD5 detection error"
       return 1
       ;;
   esac
@@ -593,9 +613,9 @@ eFSiTjxlkn_main() {
   # Upload helper if needed
 
   if [[ -z "$HELPER_MD5" ]]; then
-    echo -e "${GREEN}[+]${NC} Found md5sum on remote system no helper is needed..."
+    print_std "Found md5sum on remote system no helper is needed..."
   else
-    echo -e "${GREEN}[+]${NC} Found $MD5_INTERPRETER uploading $HELPER_MD5 by emergency upload...."
+    print_std "Found $MD5_INTERPRETER uploading $HELPER_MD5 by emergency upload...."
     emergency_upload "./helpers/$HELPER_MD5" "-o" "$HELPER_MD5"
     send_cmd "chmod +x $HELPER_MD5"
   fi

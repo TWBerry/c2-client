@@ -14,7 +14,7 @@ module_init() {
  
   # Ensure URL was provided
   if [[ -z "$URL" ]]; then
-    echo "[!] shell_module_init: URL must be provided"
+    echo "${RED}[!] ${NC}shell_module_init: URL must be provided"
     return 1
   fi
 
@@ -37,11 +37,11 @@ module_init() {
         HMAC_KEY="$OPTARG"
         ;;
       \?)
-        echo "Unknown option: -$OPTARG" >&2
+        echo "${RED}[!] ${NC}Unknown option: -$OPTARG" >&2
         return 1
         ;;
       :)
-        echo "Missing value for -$OPTARG" >&2
+        echo "${RED}[!] ${NC}Missing value for -$OPTARG" >&2
         return 1
         ;;
     esac
@@ -49,7 +49,7 @@ module_init() {
 
   # Verify the user-agent file exists
   if [[ ! -f "$UA_FILE" ]]; then
-    echo -e "[!] UA file '$UA_FILE' not found."
+    echo -e "${RED}[!] ${NC} UA file '$UA_FILE' not found."
     return 1
   fi
 
@@ -58,7 +58,7 @@ module_init() {
 
   # Ensure we actually loaded something
   if [[ ${#USER_AGENTS[@]} -eq 0 ]]; then
-    echo -e "[!] UA list is empty."
+    echo -e "${RED}[!] ${NC} UA list is empty."
     return 1
   fi
 }

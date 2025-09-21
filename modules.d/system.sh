@@ -5,6 +5,26 @@
 
 source funcmgr.sh
 
+print_warn() {
+  echo -e "${YELLOW}[!]${NC} $1" >&2
+}
+
+print_err() {
+  echo -e "${RED}[!]${NC} $1" >&2
+}
+
+print_std() {
+  echo -e "${GREEN}[+]${NC} $1"
+}
+
+print_help() {
+  echo -e "${BLUE}$1${NC} $2"
+}
+
+print_out() {
+  echo -e "${GREEN}[+]${YELLOW} $1${NC}"
+}
+
 # Main function for system tools module
 YbBKCESADB_main() {
   :
@@ -25,23 +45,23 @@ YbBKCESADB_description() {
 
 # Help function showing available commands and usage
 YbBKCESADB_help() {
-  echo -e "${BLUE}explore${NC} show basic system info"
-  echo -e "${BLUE}suid${NC} find SUID binaries"
-  echo -e "${BLUE}search${NC} search for files. Usage: search <regex> <dir>"
-  echo -e "${BLUE}detect_sandbox${NC} detect and determine sandbox type"
+  print_help "explore" "show basic system info"
+  print_help "suid" "find SUID binaries"
+  print_help "search" "search for files. Usage: search <regex> <dir>"
+  print_help "detect_sandbox" "detect and determine sandbox type"
 }
 
 # Explore function - gathers basic system information
 explore() {
-  echo -e "${GREEN}[*] ${YELLOW}System reconnaissance${NC}:"
+  print_out "System reconnaissance${NC}:"
 
   # Helper function for printing multiline remote output with indentation
   _print_block() {
     local title="$1"
     local data="$2"
-    echo -e "${GREEN}[+]${NC} ${YELLOW}${title}:${NC}"
+    print_out "${title}:${NC}"
     if [[ -z "$data" ]]; then
-      echo -e "    ${RED}(no output)${NC}"
+      print_err "(no output)${NC}"
     else
       # Prefix each line with 4 spaces for readability
       while IFS= read -r _line; do
@@ -76,18 +96,18 @@ explore() {
 
 # Detect sandbox or virtualized environment
 detect_sandbox() {
-  echo -e "${GREEN}[*] ${YELLOW}Checking for sandbox or VM environment on remote system...${NC}"
+  print_out "Checking for sandbox or VM environment on remote system..."
   local DETECTED=0
 
   # 1. Docker / LXC / Kubernetes detection via cgroup
   if send_cmd "grep -qE 'docker|lxc|kubepods' /proc/1/cgroup && echo yes || echo no" | grep -q yes; then
-    echo -e "${GREEN}[!] ${YELLOW}Detected containerized environment (Docker/LXC/Kubernetes)${NC}"
+    print_out "Detected containerized environment (Docker/LXC/Kubernetes)"
     DETECTED=1
   fi
 
   # 2. Bubblewrap detection via mount
   if send_cmd "mount | grep -q '/bubblewrap' && echo yes || echo no" | grep -q yes; then
-    echo -e "${GREEN}[!] ${YELLOW}Detected Bubblewrap sandbox${NC}"
+    print_out "Detected Bubblewrap sandbox"
     DETECTED=1
   fi
 
@@ -96,48 +116,48 @@ detect_sandbox() {
   PN=$(send_cmd "cat /sys/class/dmi/id/product_name 2>/dev/null || echo unknown")
   case "$PN" in
     *VirtualBox*)
-      echo -e "${GREEN}[!] ${YELLOW}Detected VirtualBox VM${NC}"
+      print_out "Detected VirtualBox VM"
       DETECTED=1
       ;;
     *VMware*)
-      echo -e "${GREEN}[!] ${YELLOW}Detected VMware VM${NC}"
+      print_out "Detected VMware VM"
       DETECTED=1
       ;;
     *KVM*)
-      echo -e "${GREEN}[!] ${YELLOW}Detected KVM/QEMU VM${NC}"
+      print_out "Detected KVM/QEMU VM"
       DETECTED=1
       ;;
     *Bochs*)
-      echo -e "${GREEN}[!] ${YELLOW}Detected Bochs VM${NC}"
+      print_out "Detected Bochs VM"
       DETECTED=1
       ;;
     *Microsoft*Virtual*)
-      echo -e "${GREEN}[!] ${YELLOW}Detected Hyper-V VM${NC}"
+      print_out "Detected Hyper-V VM"
       DETECTED=1
       ;;
   esac
 
   # 4. Hypervisor flag in CPU info
   if send_cmd "grep -q 'hypervisor' /proc/cpuinfo && echo yes || echo no" | grep -q yes; then
-    echo -e "${GREEN}[!] ${YELLOW}Hypervisor flag detected in CPU info${NC}"
+    print_out "Hypervisor flag detected in CPU info"
     DETECTED=1
   fi
 
   # 5. systemd-nspawn container check
   if send_cmd "grep -q 'systemd-nspawn' /proc/1/cmdline && echo yes || echo no" | grep -q yes; then
-    echo -e "${GREEN}[!] ${YELLOW}Detected systemd-nspawn container${NC}"
+    print_out "Detected systemd-nspawn container"
     DETECTED=1
   fi
 
   # 6. Container-specific devices
   if send_cmd "[ -d /dev/.lxc ] && echo yes || [ -d /dev/.dockerinit ] && echo yes || echo no" | grep -q yes; then
-    echo -e "${GREEN}[!] ${YELLOW}Detected container-specific devices (/dev/.lxc or /dev/.dockerinit)${NC}"
+    print_out "etected container-specific devices (/dev/.lxc or /dev/.dockerinit)${NC}"
     DETECTED=1
   fi
 
   # Final detection result
   if [[ "$DETECTED" -eq 0 ]]; then
-    echo -e "${GREEN}[+] ${YELLOW}No sandbox or VM detected on remote system.${NC}"
+    print_out "No sandbox or VM detected on remote system."
   fi
 }
 
@@ -145,12 +165,12 @@ detect_sandbox() {
 find_files() {
   local PATTERN="$1"
   local DIR="${2:-/}"
-  echo -e "${GREEN}[*] ${YELLOW}Finding files: $PATTERN in $DIR${NC}"
+  print_out "Finding files: $PATTERN in $DIR${NC}"
   send_cmd "find $DIR -name '$PATTERN' -type f 2>/dev/null"
 }
 
 # Find SUID binaries on the system
 find_suid() {
-  echo -e "${GREEN}[*] ${YELLOW}Finding suid binaries${NC}"
+  print_out "Finding suid binaries..."
   send_cmd "find / -perm /4000 2>/dev/null"
 }
