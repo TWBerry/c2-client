@@ -6,13 +6,32 @@
 
 source funcmgr.sh
 
+print_warn() {
+  echo -e "${YELLOW}[!]${NC} $1" >&2
+}
+
+print_err() {
+  echo -e "${RED}[!]${NC} $1" >&2
+}
+                                                                                        print_std() {
+  echo -e "${GREEN}[+]${NC} $1"
+}
+
+print_help() {
+  echo -e "${BLUE}$1${NC} $2"
+}
+
+print_out() {
+  echo -e "${GREEN}[+]${YELLOW} $1${NC}"
+}
+
 module_init() {
   # Example: first parameter is an URL or target identifier
   URL="${1:-}"
   MODULE_OPT="${2:-default}"
 
   if [[ -z "$URL" ]]; then
-    echo "[!] module_init: URL must be provided"
+    print_err "module_init: URL must be provided"
     return 1
   fi
 
@@ -27,9 +46,9 @@ module_init() {
 # Replace the body with the framework-specific transport call (POST, Redis injection, encrypted channel, etc.)
 # Keep it minimal and safe: any escaping/encryption should be handled by the framework.
 send_cmd() {
-  local CMD="$1"
+  local CMD=$(cmd_wrapper "$1")
   if [[ -z "$CMD" ]]; then
-    echo "[!] send_cmd: empty command"
+    print_err "send_cmd: empty command"
     return 1
   fi
 

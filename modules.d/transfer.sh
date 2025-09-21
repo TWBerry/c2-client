@@ -162,18 +162,18 @@ emergency_upload() {
     send_cmd "echo >> '$REMOTE_ESCAPED'"
 
     # Verify upload by comparing file sizes
-    local LOCAL_SIZE
-    LOCAL_SIZE=$(stat -c%s "$LOCAL_FILE")
-    local REMOTE_SIZE
-    REMOTE_SIZE=$(send_cmd "ls -l '$REMOTE_ESCAPED' 2>/dev/null | awk '{print \$5}'")
+    #local LOCAL_SIZE
+    #LOCAL_SIZE=$(stat -c%s "$LOCAL_FILE")
+    #local REMOTE_SIZE
+    #REMOTE_SIZE=$(send_cmd "ls -l '$REMOTE_ESCAPED' 2>/dev/null | awk '{print \$5}'")
 
-    if [[ "$LOCAL_SIZE" -eq "$REMOTE_SIZE" ]]; then
-      print_std "Upload verified: $REMOTE_FILE ($LOCAL_SIZE bytes)"
-      return 0
-    else
-      print_err "Size mismatch: local=$LOCAL_SIZE, remote=$REMOTE_SIZE"
-      return 3
-    fi
+    #if [[ "$LOCAL_SIZE" -eq "$REMOTE_SIZE" ]]; then
+    #  print_std "Upload verified: $REMOTE_FILE ($LOCAL_SIZE bytes)"
+    #  return 0
+    #else
+    #  print_err "Size mismatch: local=$LOCAL_SIZE, remote=$REMOTE_SIZE"
+    #  return 3
+    #fi
   else
     print_err "send_cmd failed while attempting to upload"
     return 2

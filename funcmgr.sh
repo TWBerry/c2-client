@@ -35,10 +35,8 @@ register_cmdline_param() {
 #   the missing callback.
 # - Remaining args (unprocessed) are stored in the global array CMDLINE_REMAINING.
 CMDLINE_REMAINING=()
-
 process_cmdline_params() {
     CMDLINE_REMAINING=()   # clear previous contents
-
     if (( $# == 0 )); then
         return 0
     fi
@@ -46,7 +44,6 @@ process_cmdline_params() {
     # keep the first argument separately
     local first="$1"
     shift
-
     # temporary file for arguments
     local tmpfile
     tmpfile=$(mktemp)
@@ -76,3 +73,47 @@ process_cmdline_params() {
     done < "$tmpfile"
     rm -f "$tmpfile"
 }
+
+# --- Command wrapper management ---
+# Global variable for the currently registered wrapper function
+CMD_WRAPPER_FUNC=""
+
+# Register a command wrapper function
+register_cmd_wrapper() {
+    local func_name="$1"
+    CMD_WRAPPER_FUNC="$func_name"
+}
+
+# Unregister the current command wrapper function
+unregister_cmd_wrapper() {
+    CMD_WRAPPER_FUNC=""
+}
+
+# Wrapper handler
+cmd_wrapper() {
+    local cmd="$*"
+    if [[ -n "$CMD_WRAPPER_FUNC" ]]; then
+        # call the registered wrapper function
+        "$CMD_WRAPPER_FUNC" "$cmd"
+    else
+        # fallback – return the original command unmodified
+        echo "$cmd"
+    fi
+}
+
+EXIT_FUNCS=()
+
+register_exit_func() {
+    local fn="$1"
+    EXIT_FUNCS+=("$fn")
+}
+
+# Trap to call all registered exit functions on normal exit
+run_exit_funcs() {
+    for fn in "${EXIT_FUNCS[@]}"; do
+        "$fn"
+    done
+}
+
+trap run_exit_funcs EXIT
+

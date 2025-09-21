@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 shopt -s histappend
 HISTORY_FILE="${HOME}/.c2_client_history"
 export HISTFILE="$HISTORY_FILE"
@@ -197,7 +197,12 @@ main() {
 assemble_main_loop() {
   echo -e "${GREEN}[+]${NC} Assembling main loop..."
   main_loop_command+='while true; do'$'\n'
-  main_loop_command+='  echo -ne "${BLUE}"'$'\n'
+  main_loop_command+='  user=$(send_cmd "whoami")'$'\n'
+  main_loop_command+='  if [[ $user == "root" ]]; then'$'\n'
+  main_loop_command+='    echo -ne "${RED}"'$'\n'
+  main_loop_command+='  else'$'\n'
+  main_loop_command+='    echo -ne "${BLUE}"'$'\n'
+  main_loop_command+='  fi'$'\n'
   main_loop_command+='  read_with_history'$'\n'
   main_loop_command+='  LINE="$READ_LINE"'$'\n'
   main_loop_command+='  echo -ne "${NC}"'$'\n'

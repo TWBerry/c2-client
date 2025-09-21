@@ -111,6 +111,25 @@ echo "Remaining args: ${CMDLINE_REMAINING[*]}"
 
 This system ensures modular commands and parameters are handled consistently and allows startup flags (e.g., `--no-tor`) to be processed automatically.
 
+## Command Wrappers
+
+`register_cmd_wrapper <function_name>`
+Registers a wrapper function that intercepts all commands sent via send_cmd(). This allows modules to transparently modify or escalate commands (e.g., LPE, custom processing).
+
+`unregister_cmd_wrapper()`
+Unregisters the currently active command wrapper. Subsequent send_cmd() calls will execute commands normally without interception.
+
+`cmd_wrapper <command>`
+Executes the registered wrapper function if one exists. Otherwise, returns the original command unmodified. This function is automatically called inside the main loop before send_cmd() execution.
+
+##Exit Functions
+
+`register_exit_func <function_name>`
+Registers a cleanup function to be executed automatically when the C2 shell exits (exit command or script termination). Useful for removing temporary files, disabling wrappers, or other cleanup operations.
+
+`run_exit_funcs()`
+Invokes all registered exit functions in order. This is automatically triggered by the trap set in funcmgr.sh:
+
 ## Module Management (modules.sh)
 
 Modules are managed through the `modules.sh` tool:

