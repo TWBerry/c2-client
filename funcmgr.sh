@@ -36,84 +36,117 @@ register_cmdline_param() {
 # - Remaining args (unprocessed) are stored in the global array CMDLINE_REMAINING.
 CMDLINE_REMAINING=()
 process_cmdline_params() {
-    CMDLINE_REMAINING=()   # clear previous contents
-    if (( $# == 0 )); then
-        return 0
+  CMDLINE_REMAINING=() # clear previous contents
+  if (($# == 0)); then
+    return 0
+  fi
+
+  # keep the first argument separately
+  local first="$1"
+  shift
+  # temporary file for arguments
+  local tmpfile
+  tmpfile=$(mktemp)
+  for arg in "$@"; do
+    echo "$arg" >>"$tmpfile"
+  done
+
+  local cmdline_entry param present_func missing_func
+
+  for cmdline_entry in "${cmdline_list[@]}"; do
+    read -r param present_func missing_func <<<"$cmdline_entry"
+    if grep -qxE "^$param$" "$tmpfile"; then
+      # parameter is present
+      declare -f "$present_func" >/dev/null && "$present_func" >&2
+      # remove all occurrences of the parameter from the file
+      sed -i "/^$param$/d" "$tmpfile"
+    else
+      # parameter is missing
+      declare -f "$missing_func" >/dev/null && "$missing_func" >&2
     fi
+  done
 
-    # keep the first argument separately
-    local first="$1"
-    shift
-    # temporary file for arguments
-    local tmpfile
-    tmpfile=$(mktemp)
-    for arg in "$@"; do
-        echo "$arg" >> "$tmpfile"
-    done
-
-    local cmdline_entry param present_func missing_func
-
-    for cmdline_entry in "${cmdline_list[@]}"; do
-        read -r param present_func missing_func <<<"$cmdline_entry"
-        if grep -qxE "^$param$" "$tmpfile"; then
-            # parameter is present
-            declare -f "$present_func" >/dev/null && "$present_func" >&2
-            # remove all occurrences of the parameter from the file
-            sed -i "/^$param$/d" "$tmpfile"
-        else
-            # parameter is missing
-            declare -f "$missing_func" >/dev/null && "$missing_func" >&2
-        fi
-    done
-
-    # store the result in the global variable
-    CMDLINE_REMAINING=("$first")
-    while IFS= read -r line; do
-        [[ -n "$line" ]] && CMDLINE_REMAINING+=("$line")
-    done < "$tmpfile"
-    rm -f "$tmpfile"
+  # store the result in the global variable
+  CMDLINE_REMAINING=("$first")
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && CMDLINE_REMAINING+=("$line")
+  done <"$tmpfile"
+  rm -f "$tmpfile"
 }
 
 # --- Command wrapper management ---
 # Global variable for the currently registered wrapper function
 CMD_WRAPPER_FUNC=""
 
-# Register a command wrapper function
+# --- Chained command wrappers ---
+
+# Array to store registered wrapper functions
+CMD_WRAPPERS=()
+
+#Register a wrapper function (append by default)
 register_cmd_wrapper() {
     local func_name="$1"
-    CMD_WRAPPER_FUNC="$func_name"
-}
-
-# Unregister the current command wrapper function
-unregister_cmd_wrapper() {
-    CMD_WRAPPER_FUNC=""
-}
-
-# Wrapper handler
-cmd_wrapper() {
-    local cmd="$*"
-    if [[ -n "$CMD_WRAPPER_FUNC" ]]; then
-        # call the registered wrapper function
-        "$CMD_WRAPPER_FUNC" "$cmd"
+    # Debug wrapper must always be last
+    if [[ "$func_name" == "debug_wrapper" ]]; then
+        CMD_WRAPPERS=("${CMD_WRAPPERS[@]}" "$func_name")
     else
-        # fallback – return the original command unmodified
-        echo "$cmd"
+        # Insert before debug_wrapper if it exists
+        local new_list=()
+        for w in "${CMD_WRAPPERS[@]}"; do
+            if [[ "$w" == "debug_wrapper" ]]; then
+                new_list+=("$func_name")
+            fi
+            new_list+=("$w")
+        done
+        if [[ ${#new_list[@]} -eq 0 ]]; then
+            new_list=("$func_name")
+        fi
+        CMD_WRAPPERS=("${new_list[@]}")
     fi
 }
 
-EXIT_FUNCS=()
+# Unregister a specific wrapper function
+unregister_cmd_wrapper() {
+    local func_name="$1"
+    local i
+    for i in "${!CMD_WRAPPERS[@]}"; do
+        if [[ "${CMD_WRAPPERS[$i]}" == "$func_name" ]]; then
+            unset 'CMD_WRAPPERS[i]'
+        fi
+    done
+    # Reindex array
+    CMD_WRAPPERS=("${CMD_WRAPPERS[@]}")
+}
+
+# Unregister all wrappers
+unregister_all_wrappers() {
+    CMD_WRAPPERS=()
+}
+
+# Wrapper handler (chains all registered wrappers)
+cmd_wrapper() {
+    local cmd="$*"
+    local tmp="$cmd"
+    local fn
+    for fn in "${CMD_WRAPPERS[@]}"; do
+        tmp="$($fn "$tmp")"
+    done
+    echo "$tmp"
+}
+
+
+#EXIT_FUNCS=()
 
 register_exit_func() {
-    local fn="$1"
-    EXIT_FUNCS+=("$fn")
+  local fn="$1"
+  EXIT_FUNCS+=("$fn")
 }
 
 # Trap to call all registered exit functions on normal exit
 run_exit_funcs() {
-    for fn in "${EXIT_FUNCS[@]}"; do
-        "$fn"
-    done
+  for fn in "${EXIT_FUNCS[@]}"; do
+    "$fn"
+  done
 }
 
 trap run_exit_funcs EXIT
-

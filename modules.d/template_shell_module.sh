@@ -13,7 +13,7 @@ print_warn() {
 print_err() {
   echo -e "${RED}[!]${NC} $1" >&2
 }
-                                                                                        print_std() {
+print_std() {
   echo -e "${GREEN}[+]${NC} $1"
 }
 

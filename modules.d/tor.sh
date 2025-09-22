@@ -96,7 +96,6 @@ _get_ip_via_tor_or_direct() {
   return 1
 }
 
-
 show_ip() {
   print_out "Checking public IP..."
   local ip
@@ -237,7 +236,7 @@ change_ip() {
     waited=$((waited + 3))
     new_ip="$(_get_ip_via_tor_or_direct)" || new_ip=""
     if [[ -n "$new_ip" && "$new_ip" != "$old_ip" ]]; then
-    print_std "New IP: ${BLUE}$new_ip${NC}"
+      print_std "New IP: ${BLUE}$new_ip${NC}"
       return 0
     fi
   done

@@ -16,7 +16,7 @@ print_warn() {
 print_err() {
   echo -e "${RED}[!]${NC} $1" >&2
 }
-                                                                                        print_std() {
+print_std() {
   echo -e "${GREEN}[+]${NC} $1"
 }
 
@@ -30,7 +30,7 @@ print_out() {
 
 module_init() {
   URL="$1"
- 
+
   # Ensure URL was provided
   if [[ -z "$URL" ]]; then
     print_err "shell_module_init: URL must be provided"

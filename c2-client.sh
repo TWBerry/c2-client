@@ -17,63 +17,61 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 main_loop_command=""
-VERSION="1.1.0"
+VERSION="1.2.0"
 source "funcmgr.sh"
 # Check if readline is available
 check_readline() {
-    if ! bind -V >/dev/null 2>&1; then
-        echo -e "${YELLOW}[!]${NC} Readline not available. Using basic input without history."
-        return 1
-    fi
-    return 0
+  if ! bind -V >/dev/null 2>&1; then
+    echo -e "${YELLOW}[!]${NC} Readline not available. Using basic input without history."
+    return 1
+  fi
+  return 0
 }
 
 # Initialize readline and history
 init_readline() {
-    if check_readline; then
-        # Enable arrow key navigation
-        bind '"\e[A": history-search-backward' 2>/dev/null
-        bind '"\e[B": history-search-forward' 2>/dev/null
-        bind '"\e[C": forward-char' 2>/dev/null
-        bind '"\e[D": backward-char' 2>/dev/null
+  if check_readline; then
+    # Enable arrow key navigation
+    bind '"\e[A": history-search-backward' 2>/dev/null
+    bind '"\e[B": history-search-forward' 2>/dev/null
+    bind '"\e[C": forward-char' 2>/dev/null
+    bind '"\e[D": backward-char' 2>/dev/null
 
-        # Load or create history
-        [[ -f "$HISTFILE" ]] || touch "$HISTFILE"
-        history -r "$HISTFILE"
-        LAST_COMMAND=$(history | tail -n 1 | sed 's/^[ ]*[0-9]*[ ]*//')
-    fi
+    # Load or create history
+    [[ -f "$HISTFILE" ]] || touch "$HISTFILE"
+    history -r "$HISTFILE"
+    LAST_COMMAND=$(history | tail -n 1 | sed 's/^[ ]*[0-9]*[ ]*//')
+  fi
 }
-
 
 # Save command to history
 save_to_history() {
-    local command="$1"
-    if check_readline && [[ -n "$command" ]]; then
-        if [[ "$command" != "$LAST_COMMAND" ]]; then
-            history -s "$command"
-            history -a
-            LAST_COMMAND="$command"
-        fi
+  local command="$1"
+  if check_readline && [[ -n "$command" ]]; then
+    if [[ "$command" != "$LAST_COMMAND" ]]; then
+      history -s "$command"
+      history -a
+      LAST_COMMAND="$command"
     fi
+  fi
 }
-
 
 # Enhanced read with history support
 read_with_history() {
-    local line
-    
-    if check_readline; then
-        # Use read -e for readline support
-        read -rep "$user@$hostname>" line
-        # Add to history
-        save_to_history "$line"
-    else
-        # Fallback to basic read
-        read -rp "$user@$hostname>" line
-    fi
-    
-    READ_LINE="$line"
-    return 0
+  local line
+
+  if check_readline; then
+    # Use read -e for readline support
+    read -rep "$user@$hostname>" line
+    # Add to history
+    save_to_history "$line"
+  else
+    # Fallback to basic read
+    read -rp "$user@$hostname>" line
+  fi
+
+  READ_LINE="$line"
+  return 0
 }
 
 # Print available command list with descriptions
@@ -95,22 +93,22 @@ print_command_list() {
 
 # Show command history
 show_history() {
-    if [[ -f "$HISTORY_FILE" ]]; then
-        echo -e "${GREEN}Command history:${NC}"
-        cat -n "$HISTORY_FILE" | tail -20
-    else
-        echo -e "${YELLOW}No history found${NC}"
-    fi
+  if [[ -f "$HISTORY_FILE" ]]; then
+    echo -e "${GREEN}Command history:${NC}"
+    cat -n "$HISTORY_FILE" | tail -20
+  else
+    echo -e "${YELLOW}No history found${NC}"
+  fi
 }
 
 # Clear command history
 clear_history() {
-    if [[ -f "$HISTORY_FILE" ]]; then
-        > "$HISTORY_FILE"
-        echo -e "${GREEN}History cleared${NC}"
-    else
-        echo -e "${YELLOW}No history to clear${NC}"
-    fi
+  if [[ -f "$HISTORY_FILE" ]]; then
+    >"$HISTORY_FILE"
+    echo -e "${GREEN}History cleared${NC}"
+  else
+    echo -e "${YELLOW}No history to clear${NC}"
+  fi
 }
 
 # Execute command locally on the client machine
@@ -220,7 +218,7 @@ assemble_main_loop() {
   main_loop_command+='    history)'$'\n'
   main_loop_command+='      show_history'$'\n'
   main_loop_command+='      ;;'$'\n'
-  
+
   main_loop_command+='    clear_history)'$'\n'
   main_loop_command+='      clear_history'$'\n'
   main_loop_command+='      ;;'$'\n'
