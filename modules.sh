@@ -2,11 +2,8 @@
 set -euo pipefail
 
 # Configuration
-MODULES_LIST="./modules"  # soubor se seznamem modulů (jméno každého modulu na řádek)
-MODULES_DIR="./modules.d" # defaultní složka pro nové moduly (změň si dle potřeby)
-
-mkdir -p "$(dirname "$MODULES_LIST")"
-mkdir -p "$MODULES_DIR"
+MODULES_LIST="./modules"
+MODULES_DIR="./modules.d"
 
 # create a new module file
 # usage: make_new_module <module_name> [output_path]

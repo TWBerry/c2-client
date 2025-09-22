@@ -501,7 +501,6 @@ parallel_download() {
 eFSiTjxlkn_main() {
   HELPER="none"
   B64_INTERPRETER=$(remote_check_b64helper)
-
   # Set appropriate base64 encode/decode commands based on available helpers
   case "$B64_INTERPRETER" in
     base64)

@@ -58,20 +58,39 @@ RiMyJcVwtt_help() {
   print_help "disable_gameover" "disable gameover(lay) LPE command wrapper and clean up"
 }
 
-scan_system() {
-  local interpreters=("python3" "python" "perl" "ruby" "php")
-  GO_HELPER="none"
-  print_std "Scanning target system..."
-  for interp in "${interpreters[@]}"; do
-    if send_cmd "command -v $interp >/dev/null 2>&1"; then
-      GO_HELPER="$interp"
-      print_std "Found suitable interpreter: $GO_HELPER"
-      return 0
+# Helper: check if remote side has command <cmdname>.
+# Returns 0 if available, 1 otherwise.
+# We rely on send_cmd returning the command output as text (not the exit code).
+remote_has_cmd() {
+    local cmdname="$1"
+    local marker="_HAS_CMD_"
+    # Run remote check: if command -v succeeds, echo marker
+    # Use printf to avoid extra newline issues; but echo is fine.
+    local out
+    out="$(send_cmd "command -v ${cmdname} >/dev/null 2>&1 && printf '${marker}' || printf ''" 2>/dev/null || true)"
+    # Trim whitespace (in case send_cmd adds newlines)
+    out="${out%%[[:space:]]}"  # remove trailing whitespace (quick trim)
+    if [[ "$out" == "$marker" ]]; then
+        return 0
     fi
-  done
+    return 1
+}
 
-  print_warn "No suitable interpreters found on target system."
-  return 1
+# Revised scan_system using remote_has_cmd
+scan_system() {
+    local interpreters=("python3" "python" "perl" "ruby" "php")
+    GO_HELPER="none"
+    print_std "Scanning target system for suitable interpreters..."
+    for interp in "${interpreters[@]}"; do
+        if remote_has_cmd "$interp"; then
+            GO_HELPER="$interp"
+            print_std "Found suitable interpreter: $GO_HELPER"
+            return 0
+        fi
+    done
+
+    print_warn "No suitable interpreters found on target system."
+    return 1
 }
 
 # Wrapper function for gameover commands
@@ -89,7 +108,12 @@ enable_gameover() {
   fi
 
   print_std "Setting up gameover(lay)..."
-  scan_system
+  if remote_has_cmd "unshare -rm"; then
+    scan_system
+  else
+    print_warn "System is not suitable for ganeover(lay)"
+    GO_HELPER="none"
+  fi
   if [[ $GO_HELPER == "none" ]]; then
     print_warn "Aborting setup..."
     return 1

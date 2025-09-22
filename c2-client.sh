@@ -7,6 +7,7 @@ export HISTSIZE=1000
 export HISTFILESIZE=2000
 # Always flush history on exit
 trap 'history -a 2>/dev/null || true' EXIT
+DEBUG="0"
 
 # Color definitions for output formatting
 RED='\033[0;31m'
@@ -16,13 +17,24 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+print_warn() { echo -e "${YELLOW}[!]${NC} $1" >&2; }
+print_err() { echo -e "${RED}[!]${NC} $1" >&2; }
+print_std() { echo -e "${GREEN}[+]${NC} $1"; }
+print_help() { echo -e "${BLUE}$1${NC} $2"; }
+print_out() { echo -e "${GREEN}[+]${YELLOW} $1${NC}"; }
+print_dbg() {
+   local ts
+   ts=$(date +"%Y-%m-%d %H:%M:%S")
+   echo "[$ts] $1" >> "$DEBUG_LOG_FILE"
+}
+
 main_loop_command=""
 VERSION="1.2.0"
 source "funcmgr.sh"
 # Check if readline is available
 check_readline() {
   if ! bind -V >/dev/null 2>&1; then
-    echo -e "${YELLOW}[!]${NC} Readline not available. Using basic input without history."
+    print_warn "Readline not available. Using basic input without history."
     return 1
   fi
   return 0
@@ -94,10 +106,10 @@ print_command_list() {
 # Show command history
 show_history() {
   if [[ -f "$HISTORY_FILE" ]]; then
-    echo -e "${GREEN}Command history:${NC}"
+    print_std "Command history:"
     cat -n "$HISTORY_FILE" | tail -20
   else
-    echo -e "${YELLOW}No history found${NC}"
+    print_warn "No history found"
   fi
 }
 
@@ -105,9 +117,9 @@ show_history() {
 clear_history() {
   if [[ -f "$HISTORY_FILE" ]]; then
     >"$HISTORY_FILE"
-    echo -e "${GREEN}History cleared${NC}"
+    print_std "History cleared"
   else
-    echo -e "${YELLOW}No history to clear${NC}"
+    print_warn "No history to clear"
   fi
 }
 
@@ -118,14 +130,14 @@ local_cmd() {
 
 # Load all modules specified in the modules file
 load_modules() {
-  echo -e "${GREEN}[+]${NC} Loading modules..."
+  print_std "Loading modules..."
 
   while IFS= read -r mod || [[ -n "$mod" ]]; do
     [[ -z "$mod" ]] && continue # Skip empty lines
 
     local file="./modules.d/$mod.sh"
     if [[ ! -f "$file" ]]; then
-      echo -e "${RED}[!]${NC} Module file $file not found, skipping"
+      print_err "Module file $file not found, skipping"
       continue
     fi
 
@@ -141,7 +153,7 @@ load_modules() {
     local missing=0
     for fn in "${required_funcs[@]}"; do
       if ! declare -f "$fn" >/dev/null; then
-        echo -e "${RED}[!]${NC} Module $mod is missing required function: $fn"
+        print_err "Module $mod is missing required function: $fn"
         missing=1
       fi
     done
@@ -150,7 +162,7 @@ load_modules() {
     # Initialize the module
     "${id}_init"
 
-    echo -e "${GREEN}[+]${NC} Module $mod loaded."
+    print_std "Module $mod loaded."
     "${id}_description"
   done <modules
 }
@@ -162,7 +174,7 @@ main() {
   # Check connection by getting remote username
   user=$(send_cmd "whoami")
   if [[ -z "$user" ]]; then
-    echo -e "${RED}[+]${NC} Failed to connect to $URL"
+    print_err "Failed to connect to $URL"
     exit 1
   else
     echo -e "${NC}Connected to ${BLUE}$URL ${NC} as ${BLUE}$user${NC}"
@@ -183,7 +195,7 @@ main() {
     if declare -f "$func" >/dev/null; then
       "$func"
     else
-      echo -e "${YELLOW}[!]${NC} Module $mod has no $func, skipping"
+      print_warn "Module $mod has no $func, skipping"
     fi
   done <modules
 
@@ -203,6 +215,9 @@ assemble_main_loop() {
   main_loop_command+='  fi'$'\n'
   main_loop_command+='  read_with_history'$'\n'
   main_loop_command+='  LINE="$READ_LINE"'$'\n'
+  main_loop_command+='  if [[ "${DEBUG}" == "1" ]]; then'$'\n'
+  main_loop_command+='    print_dbg "$LINE"'$'\n'
+  main_loop_command+='  fi'$'\n'
   main_loop_command+='  echo -ne "${NC}"'$'\n'
   main_loop_command+='  [[ "$LINE" == "exit" ]] && break'$'\n'
   main_loop_command+='  set -- $LINE'$'\n'
@@ -280,7 +295,7 @@ SHELL_MODULE_NAME="${1:-template_shell_module}"
 SHELL_MODULE_PATH="./modules.d/${SHELL_MODULE_NAME}.sh"
 
 if [[ ! -f "$SHELL_MODULE_PATH" ]]; then
-  echo -e "${RED}[!] ${NC}Shell module $SHELL_MODULE_NAME not found"
+  print_err "Shell module $SHELL_MODULE_NAME not found"
   exit 1
 fi
 
@@ -288,7 +303,7 @@ source "$SHELL_MODULE_PATH"
 # Validate that the shell module has all required functions
 for fn in module_init module_main send_cmd module_description show_module_help; do
   if ! declare -f "$fn" >/dev/null; then
-    echo -e "${RED}[!] ${NC}Shell module $SHELL_MODULE_NAME is missing function $fn"
+    print_err "Shell module $SHELL_MODULE_NAME is missing function $fn"
     exit 1
   fi
 done
@@ -306,7 +321,7 @@ fi
 load_modules
 process_cmdline_params "$@"
 module_init "${CMDLINE_REMAINING[@]}"
-echo -e "${GREEN}[+] ${NC}Loaded shell module: $SHELL_MODULE_NAME"
+print_std "Loaded shell module: $SHELL_MODULE_NAME"
 module_description
 assemble_main_loop
 main

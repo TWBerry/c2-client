@@ -120,7 +120,7 @@ Registers a wrapper function that intercepts all commands sent via send_cmd(). T
 Unregisters the currently active command wrapper. Subsequent send_cmd() calls will execute commands normally without interception.
 
 `cmd_wrapper <command>`
-Executes the registered wrapper function if one exists. Otherwise, returns the original command unmodified. This function is automatically called inside the main loop before send_cmd() execution.
+Executes the registered wrapper function if one exists. Otherwise, returns the original command unmodified. This function is automatically called inside the shell module send_cmd() function.
 
 ##Exit Functions
 

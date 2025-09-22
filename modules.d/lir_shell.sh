@@ -46,7 +46,7 @@ send_cmd() {
   local out
   local tmp
   tmp=$(mktemp) || {
-    echo "[!] mktemp failed"
+    print_err "mktemp failed"
     return 1
   }
   # Use curl to send a GET request with the URL-encoded 'cmd' parameter
@@ -70,7 +70,9 @@ send_cmd() {
 
   # Print the cleaned output (preserve internal newlines).
   # Using printf ensures predictable behavior with empty strings.
-  printf '%s\n' "$out"
+  if ! [[ -z $out ]]; then
+  echo "$out"
+  fi
 }
 
 # module_main: entry point when the module is executed.
