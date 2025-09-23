@@ -23,9 +23,11 @@ print_std() { echo -e "${GREEN}[+]${NC} $1"; }
 print_help() { echo -e "${BLUE}$1${NC} $2"; }
 print_out() { echo -e "${GREEN}[+]${YELLOW} $1${NC}"; }
 print_dbg() {
-   local ts
-   ts=$(date +"%Y-%m-%d %H:%M:%S")
-   echo "[$ts] $1" >> "$DEBUG_LOG_FILE"
+   if [[ "${DEBUG}" == "1" ]]; then
+     local ts
+     ts=$(date +"%Y-%m-%d %H:%M:%S")
+     echo "[$ts] $1" >> "$DEBUG_LOG_FILE"
+   fi
 }
 
 main_loop_command=""
@@ -169,6 +171,7 @@ load_modules() {
 
 # Main execution function
 main() {
+  print_dbg "[SESSION STARTED]"
   # Initialize readline
   init_readline
   # Check connection by getting remote username
@@ -201,6 +204,7 @@ main() {
 
   print_command_list
   eval "$main_loop_command"
+  print_dbg "[SESSION ENDED]"
 }
 
 # Assemble the main command loop structure
@@ -215,9 +219,7 @@ assemble_main_loop() {
   main_loop_command+='  fi'$'\n'
   main_loop_command+='  read_with_history'$'\n'
   main_loop_command+='  LINE="$READ_LINE"'$'\n'
-  main_loop_command+='  if [[ "${DEBUG}" == "1" ]]; then'$'\n'
-  main_loop_command+='    print_dbg "$LINE"'$'\n'
-  main_loop_command+='  fi'$'\n'
+  main_loop_command+='  print_dbg "$LINE"'$'\n'
   main_loop_command+='  echo -ne "${NC}"'$'\n'
   main_loop_command+='  [[ "$LINE" == "exit" ]] && break'$'\n'
   main_loop_command+='  set -- $LINE'$'\n'

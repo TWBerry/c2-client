@@ -24,6 +24,14 @@ print_out() {
   echo -e "${GREEN}[+]${YELLOW} $1${NC}"
 }
 
+print_dbg() {
+   if [[ "${DEBUG}" == "1" ]]; then
+     local ts
+     ts=$(date +"%Y-%m-%d %H:%M:%S")
+     echo "[$ts] $1" >> "$DEBUG_LOG_FILE"
+   fi
+}
+
 uONYoUDBwv_init() {
   register_function "enable_tor" "enable_tor" "0" 'Enable tor socks proxy'
   register_function "disable_tor" "disable_tor" "0" 'Disable tor socks proxy'
@@ -231,6 +239,7 @@ change_ip() {
   print_std "Old IP (via current proxy): ${BLUE}${old_ip:-unknown}${NC}"
   local waited=0
   local new_ip=""
+  print_std "Waiting for Tor..."
   while ((waited < 60)); do
     sleep 3
     waited=$((waited + 3))

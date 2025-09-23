@@ -25,6 +25,14 @@ print_out() {
   echo -e "${GREEN}[+]${YELLOW} $1${NC}"
 }
 
+print_dbg() {
+   if [[ "${DEBUG}" == "1" ]]; then
+     local ts
+     ts=$(date +"%Y-%m-%d %H:%M:%S")
+     echo "[$ts] $1" >> "$DEBUG_LOG_FILE"
+   fi
+}
+
 module_init() {
   # Example: first parameter is an URL or target identifier
   URL="${1:-}"

@@ -24,6 +24,14 @@ print_out() {
   echo -e "${GREEN}[+]${YELLOW} $1${NC}"
 }
 
+print_dbg() {
+   if [[ "${DEBUG}" == "1" ]]; then
+     local ts
+     ts=$(date +"%Y-%m-%d %H:%M:%S")
+     echo "[$ts] $1" >> "$DEBUG_LOG_FILE"
+   fi
+}
+
 PROGRESS_WIDTH=35
 
 eFSiTjxlkn_init() {
@@ -165,7 +173,7 @@ emergency_upload() {
     #local LOCAL_SIZE
     #LOCAL_SIZE=$(stat -c%s "$LOCAL_FILE")
     #local REMOTE_SIZE
-    #REMOTE_SIZE=$(send_cmd "ls -l '$REMOTE_ESCAPED' 2>/dev/null | awk '{print \$5}'")
+    #REMOTE_SIZE=$(send_cmd "ls -l '$REMOTE_ESCAPED' 2>/dev/null" | awk '{print $5}')
 
     #if [[ "$LOCAL_SIZE" -eq "$REMOTE_SIZE" ]]; then
     #  print_std "Upload verified: $REMOTE_FILE ($LOCAL_SIZE bytes)"
@@ -326,7 +334,7 @@ parallel_upload() {
     # Save chunk into its own remote part file
     local cmd="printf '%s' '$escaped_content' > ${REMOTE_B64}.part_${chunk_num}"
     if send_cmd "$cmd" >/dev/null; then
-      #print_std "Chunk $chunk_num uploaded"
+      print_dbg "Chunk $chunk_num uploaded"
       return 0
     else
       print_err "Failed to upload chunk $chunk_num"
@@ -359,7 +367,7 @@ parallel_upload() {
   send_cmd "$BASE64_DECODE_CMD ${REMOTE_B64}.parts > '$REMOTE_OUT' && rm ${REMOTE_B64}.parts"
 
   # Verify upload by comparing file sizes
-  local remote_size=$(send_cmd "ls -l '$REMOTE_OUT' | awk '{print \$5}'")
+  local remote_size=$(send_cmd "ls -l '$REMOTE_OUT'" | awk '{print $5}')
   local local_size=$(stat -c%s "$LOCAL_FILE")
   if [[ "$remote_size" -eq "$local_size" ]]; then
     print_std "Upload verified: $remote_size bytes"
@@ -369,7 +377,7 @@ parallel_upload() {
 
   # Verify integrity with MD5 checksum
   print_std "Verifying integrity with md5sum..."
-  local remote_md5=$(send_cmd "$MD5_CMD '$REMOTE_OUT' | awk '{print \$1}'")
+  local remote_md5=$(send_cmd "$MD5_CMD '$REMOTE_OUT'" | awk '{print $1}')
   local local_md5=$(md5sum "$LOCAL_FILE" | awk '{print $1}')
 
   if [[ "$remote_md5" == "$local_md5" ]]; then
@@ -423,7 +431,7 @@ parallel_download() {
 
   # Get remote file size
   print_std "Getting file size..."
-  FILE_SIZE=$(send_cmd "ls -l '$REMOTE_FILE' | awk '{print \$5}'")
+  FILE_SIZE=$(send_cmd "ls -l '$REMOTE_FILE'" | awk '{print $5}')
 
   # Calculate total chunks needed
   TOTAL_CHUNKS=$(((FILE_SIZE + CHUNK_SIZE - 1) / CHUNK_SIZE))
@@ -441,7 +449,7 @@ parallel_download() {
 
     if [[ -n "$RESPONSE" ]]; then
       echo -n "$RESPONSE" >"$output_file"
-      #print_std "$Chunk $chunk_num OK ($count bytes)"
+      print_dbg "Chunk $chunk_num OK ($count bytes)"
       return 0
     else
       print_err "Empty response for chunk $chunk_num"
@@ -483,7 +491,7 @@ parallel_download() {
 
   # Verify integrity with MD5 checksum
   print_std "Verifying integrity with md5sum..."
-  local remote_md5=$(send_cmd "$MD5_CMD '$REMOTE_FILE' | awk '{print \$1}'")
+  local remote_md5=$(send_cmd "$MD5_CMD '$REMOTE_FILE'" | awk '{print $1}')
   local local_md5=$(md5sum "$LOCAL_OUT" | awk '{print $1}')
 
   if [[ "$remote_md5" == "$local_md5" ]]; then

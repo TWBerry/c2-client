@@ -25,6 +25,14 @@ print_out() {
   echo -e "${GREEN}[+]${YELLOW} $1${NC}"
 }
 
+print_dbg() {
+   if [[ "${DEBUG}" == "1" ]]; then
+     local ts
+     ts=$(date +"%Y-%m-%d %H:%M:%S")
+     echo "[$ts] $1" >> "$DEBUG_LOG_FILE"
+   fi
+}
+
 SDirSxobYJ_init() {
   register_function "net_summary" "network_summary" 0 "Network summary (grouped)"
   register_function "net_local" "network_local" 0 "Local interface & hardware info"

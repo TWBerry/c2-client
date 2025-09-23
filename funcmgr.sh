@@ -75,67 +75,57 @@ process_cmdline_params() {
 }
 
 # --- Command wrapper management ---
-# Global variable for the currently registered wrapper function
-CMD_WRAPPER_FUNC=""
 
 # --- Chained command wrappers ---
+if [[ -z "${FUNCMGR:-}" ]]; then
+FUNCMGR="1"
+declare -A CMD_WRAPPERS_PRIORITY   # klíč = název wrapperu, hodnota = priorita
+declare -a CMD_WRAPPERS_ORDER      # seznam wrapperů v pořadí registrace
+fi
 
-# Array to store registered wrapper functions
-CMD_WRAPPERS=()
-
-#Register a wrapper function (append by default)
 register_cmd_wrapper() {
     local func_name="$1"
-    # Debug wrapper must always be last
-    if [[ "$func_name" == "debug_wrapper" ]]; then
-        CMD_WRAPPERS=("${CMD_WRAPPERS[@]}" "$func_name")
-    else
-        # Insert before debug_wrapper if it exists
-        local new_list=()
-        for w in "${CMD_WRAPPERS[@]}"; do
-            if [[ "$w" == "debug_wrapper" ]]; then
-                new_list+=("$func_name")
-            fi
-            new_list+=("$w")
-        done
-        if [[ ${#new_list[@]} -eq 0 ]]; then
-            new_list=("$func_name")
-        fi
-        CMD_WRAPPERS=("${new_list[@]}")
-    fi
-}
-
-# Unregister a specific wrapper function
-unregister_cmd_wrapper() {
-    local func_name="$1"
-    local i
-    for i in "${!CMD_WRAPPERS[@]}"; do
-        if [[ "${CMD_WRAPPERS[$i]}" == "$func_name" ]]; then
-            unset 'CMD_WRAPPERS[i]'
-        fi
+    local priority="${2:-1000}"   # default priority 1000, debug/dir mohou mít 999/1000
+    CMD_WRAPPERS_PRIORITY["$func_name"]="$priority"
+    # Přidat do seznamu, pokud ještě není
+    for w in "${CMD_WRAPPERS_ORDER[@]}"; do
+        [[ "$w" == "$func_name" ]] && return
     done
-    # Reindex array
-    CMD_WRAPPERS=("${CMD_WRAPPERS[@]}")
+    CMD_WRAPPERS_ORDER+=("$func_name")
 }
 
-# Unregister all wrappers
-unregister_all_wrappers() {
-    CMD_WRAPPERS=()
+# Funkce na získání seznamu wrapperů seřazených podle priority
+get_wrappers_sorted() {
+    local sorted
+    sorted=$(for w in "${CMD_WRAPPERS_ORDER[@]}"; do
+        echo "$w ${CMD_WRAPPERS_PRIORITY[$w]}"
+    done | sort -k2n | awk '{print $1}')
+    echo "$sorted"
 }
 
-# Wrapper handler (chains all registered wrappers)
+# Wrapper handler
 cmd_wrapper() {
     local cmd="$*"
-    local tmp="$cmd"
-    local fn
-    for fn in "${CMD_WRAPPERS[@]}"; do
-        tmp="$($fn "$tmp")"
+    local w
+    for w in $(get_wrappers_sorted); do
+        cmd=$("$w" "$cmd")
     done
-    echo "$tmp"
+    echo "$cmd"
 }
 
+unregister_cmd_wrapper() {
+    local func_name="$1"
 
-#EXIT_FUNCS=()
+    # Vymazat z priority mapy
+    unset 'CMD_WRAPPERS_PRIORITY["$func_name"]'
+
+    # Přefiltrovat order pole bez daného wrapperu
+    local new_list=()
+    for w in "${CMD_WRAPPERS_ORDER[@]}"; do
+        [[ "$w" == "$func_name" ]] || new_list+=("$w")
+    done
+    CMD_WRAPPERS_ORDER=("${new_list[@]}")
+}
 
 register_exit_func() {
   local fn="$1"
