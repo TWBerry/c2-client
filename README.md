@@ -14,11 +14,16 @@ A modular C2 client written purely in Bash, designed for testing and lab exercis
 ```
 
 c2-client/
+├─ scripts/
+│  ├─ example.c2      # example c2 script
+│  └─ ...
 ├─ modules.d/
 │  ├─ network.sh      # network information and operations
 │  ├─ system.sh       # system operations
 │  ├─ transfer.sh     # upload/download
 │  ├─ tor.sh          # tor socks proxy manipulation
+│  ├─ debug.sh        # debug module
+│  ├─ dir.sh          # dir movement implementation
 │  ├─ *shell.sh       # core shell modules
 │  └─ ...
 ├─ funcmgr.sh         # function/module manager
@@ -113,8 +118,34 @@ This system ensures modular commands and parameters are handled consistently and
 
 ## Command Wrappers
 
-`register_cmd_wrapper <function_name>`
-Registers a wrapper function that intercepts all commands sent via send_cmd(). This allows modules to transparently modify or escalate commands (e.g., LPE, custom processing).
+`register_cmd_wrapper`
+
+Registers a command wrapper function that can transform or decorate commands before execution.
+
+**Usage:**
+```bash
+register_cmd_wrapper <function_name> [priority]
+````
+
+* `<function_name>` – name of the wrapper function to register.
+* `[priority]` – optional integer priority (default: `1000`). Wrappers are executed in ascending priority order. Lower numbers run earlier, higher numbers run later.
+
+**Notes:**
+
+* The higher the priority value, the closer to the end of the wrapper chain the function will be executed.
+* Priorities `999` and `1000` are **reserved**:
+
+  * `999` → `dir_wrapper` (virtual working directory manager).
+  * `1000` → `debug_wrapper` (must always run last).
+* All other wrappers should use values lower than `999`.
+
+**Example:**
+
+```bash
+register_cmd_wrapper my_logger 100
+```
+
+This will insert `my_logger` into the wrapper chain with priority `100`, meaning it runs before `dir_wrapper` and `debug_wrapper`.
 
 `unregister_cmd_wrapper()`
 Unregisters the currently active command wrapper. Subsequent send_cmd() calls will execute commands normally without interception.
@@ -138,19 +169,58 @@ Modules are managed through the `modules.sh` tool:
 * `./modules.sh register <module_name>` — register the module for use in the C2 client
 * `./modules.sh unregister <module_name>` — unregister and disable the module in the C2 client
 
-## Example Usage
+Jasně, můžeme do README doplnit sekci **Scripting / c2-scripts**, aby bylo jasné, že klient podporuje skripty a jak je používat. Tady je návrh, který můžeš vložit za stávající obsah:
 
-* Get a quick summary of network information:
+---
+
+## Scripting with c2-client (`c2-scripts`)
+
+The C2 client supports **modular scripting**, allowing sequences of commands to be executed in an isolated and controlled environment. Scripts are written in a **Bash-like syntax**, but instead of running local commands, they call the **C2 client functions** to interact with remote targets.
+
+### Key Features
+
+* Runs in a **subshell with dangerous builtins disabled** (`exit`, `exec`, `eval`).
+* Uses **C2 client functions** instead of direct shell commands:
+
+  * `send_cmd` — send a command to the remote target
+  * `emergency_upload` — transfer files if normal tools are missing
+  * `print_std`, `print_err` — unified output functions
+* Can include **loops, conditionals, and variables** like normal Bash.
+* Designed to be **portable and safe** inside your lab environment — scripts cannot execute arbitrary local shell commands outside the client’s API.
+* List of available c2-client specific functions is in `scripts/available_functions` file. This file is automatically updated by c2-client.
+
+### Script Structure
+
+A typical c2-script looks like this:
 
 ```bash
-net_summary
+# Example script
+print_std "[*] Running scan script..."
+HOSTS=("10.0.0.1" "10.0.0.2")
+
+for h in "${HOSTS[@]}"; do
+    result=$(send_cmd "ping -c1 $h" || echo "FAIL")
+    print_std "Host $h → $result"
+done
 ```
 
-* Call a specific registered function:
+### Running Scripts
 
-```bash
-detect_sandbox
+1. Place the script in the `scripts/` directory.
+2. Execute the script with the `run_script` from script module:
+
+```c2
+run_script ./scripts/my_scan.c2
 ```
+
+3. All output is **captured through the client**, and errors are handled via `print_err` or internal logging.
+
+### Notes
+
+* Scripts are executed **in order**, and each `send_cmd` waits for completion by default.
+* Dangerous builtins are blocked to prevent accidental termination of the client.
+* Scripts can be **reused across labs**, making testing and automation straightforward.
+* You can combine scripts with modules, e.g., network discovery, file transfer, or shell modules.
 
 ## Contribution
 

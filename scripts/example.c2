@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+#
+# example.c2 - example script for c2-client
+#
+# NOTES:
+# - This file is a plain Bash script (syntax is identical to Bash).
+# - Do NOT rely on `register_function` inside scripts: functions registered
+#   with register_function from inside a sourced script will NOT persist after
+#   the script finishes because scripts are sourced inside a local function scope.
+#   If you need persistent commands, implement them in a module instead.
+# - Prefer local variables inside functions to avoid accidental global pollution.
+# - Use provided client helpers: send_cmd, emergency_upload, print_std, print_err, fail, ...
+#
+# Example usage:
+#   run_script example.c2
+#
+
+set -o nounset
+
+print_std "example.c2: starting"
+
+# Helper local task: upload a file and make it executable on the remote host,
+# then run it in the current virtual directory.
+upload_and_run() {
+    local src="$1"
+    local dst="${2:-$(basename "$src")}"
+
+    # basic argument check
+    if [[ -z "$src" ]]; then
+        print_err "upload_and_run: missing source file"
+        return 1
+    fi
+
+    # emergdency_upload is provided by the client - sends file to remote side
+    print_std "Uploading $src as $dst ..."
+    emergency_upload "$src" || { print_err "upload failed"; return 2; }
+
+    # set executable and run
+    send_cmd "chmod +x $dst" || { print_err "chmod failed"; return 3; }
+    send_cmd "./$dst" || { print_err "remote execution failed"; return 4; }
+
+    print_std "upload_and_run: completed"
+    return 0
+}
+
+# Small workflow using the helper and simple remote commands
+main_task() {
+    # keep variables local
+    local testfile="helpers/example.sh"
+
+    print_std "Running main task..."
+
+    # Use send_cmd to inspect remote working directory (virtual dir from dir module)
+    print_std "Remote PWD: $(send_cmd 'pwd')"
+
+    # Try to upload and run a helper script
+    if ! upload_and_run "$testfile"; then
+        print_err "main_task: upload_and_run failed"
+        return 1
+    fi
+
+    # Example of running arbitrary command via send_cmd
+    print_std "Listing remote directory:"
+    send_cmd "ls -la"
+    print_std "cat test_output.txt"
+    send_cmd "cat test_output.txt"
+    send_cmd "rm example.sh test_output.txt"
+    return 0
+}
+
+# Run main task and propagate result as return code (do not use exit)
+main_task
+rc=$?
+if [[ $rc -ne 0 ]]; then
+    print_err "example.c2 finished with error code $rc"
+else
+    print_std "example.c2 finished successfully"
+fi
+
+# End of script

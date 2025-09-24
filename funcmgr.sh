@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # --- funcmgr.sh (Functionality Manager) ---
-# Manage registration of functions and processing of command-line parameters.
-# - register_function: registers REPL commands provided by modules
-# - register_cmdline_param: registers top-level flags (e.g. -c, --help) with
-#   callbacks for present/missing handling
-# - process_cmdline_params: inspects $@, invokes callbacks, and stores the
-#   remaining (unprocessed) args in a global variable.
+# Provides a system for registering REPL commands, handling command-line flags,
+# and managing command wrappers. Also supports exit hooks for cleanup.
 
-# Register a REPL function provided by a module
+# ----------------------------------------------------------------------
+# Function registration and command-line parameter handling
+# ----------------------------------------------------------------------
+
+# Register a REPL function provided by a module.
 # usage: register_function <command_name> <function_name> <param_count> <description>
+# - command_name: the REPL command the user will type
+# - function_name: the Bash function that will be invoked
+# - param_count: expected number of parameters
+# - description: short help text
 register_function() {
   local command_name="$1"
   local function_name="$2"
@@ -18,9 +22,11 @@ register_function() {
   functions_list+=("$row")
 }
 
-# Register a top-level command-line parameter with two callbacks:
+# Register a top-level command-line parameter with two callbacks.
 # usage: register_cmdline_param <param> <present_callback> <missing_callback>
-# param example: -c or --chunk-size
+# - param: e.g. "-c" or "--chunk-size"
+# - present_callback: function called if param is found
+# - missing_callback: function called if param is not found
 register_cmdline_param() {
   local cmdline_param="$1"
   local param_func_present="$2"
@@ -30,21 +36,22 @@ register_cmdline_param() {
 }
 
 # Process positional arguments ($@):
-# - For each registered cmdline param, search and remove occurrences from the
-#   provided args. If found, call the present callback. If not found, call
-#   the missing callback.
-# - Remaining args (unprocessed) are stored in the global array CMDLINE_REMAINING.
+# - For each registered cmdline param:
+#   → If present, call the "present" callback and remove it from args.
+#   → If absent, call the "missing" callback.
+# - Remaining args are stored in the global CMDLINE_REMAINING array.
 CMDLINE_REMAINING=()
 process_cmdline_params() {
-  CMDLINE_REMAINING=() # clear previous contents
+  CMDLINE_REMAINING=() # reset previous contents
   if (($# == 0)); then
     return 0
   fi
 
-  # keep the first argument separately
+  # Keep the first argument separately (often a subcommand)
   local first="$1"
   shift
-  # temporary file for arguments
+
+  # Store remaining args in a temporary file
   local tmpfile
   tmpfile=$(mktemp)
   for arg in "$@"; do
@@ -56,17 +63,17 @@ process_cmdline_params() {
   for cmdline_entry in "${cmdline_list[@]}"; do
     read -r param present_func missing_func <<<"$cmdline_entry"
     if grep -qxE "^$param$" "$tmpfile"; then
-      # parameter is present
+      # Parameter is present → call "present" callback
       declare -f "$present_func" >/dev/null && "$present_func" >&2
-      # remove all occurrences of the parameter from the file
+      # Remove all occurrences from tmpfile
       sed -i "/^$param$/d" "$tmpfile"
     else
-      # parameter is missing
+      # Parameter is missing → call "missing" callback
       declare -f "$missing_func" >/dev/null && "$missing_func" >&2
     fi
   done
 
-  # store the result in the global variable
+  # Store the remaining args
   CMDLINE_REMAINING=("$first")
   while IFS= read -r line; do
     [[ -n "$line" ]] && CMDLINE_REMAINING+=("$line")
@@ -74,27 +81,34 @@ process_cmdline_params() {
   rm -f "$tmpfile"
 }
 
-# --- Command wrapper management ---
+# ----------------------------------------------------------------------
+# Command wrapper management
+# ----------------------------------------------------------------------
+# Command wrappers are functions that intercept/modify commands before they
+# are executed. They are applied in priority order.
 
-# --- Chained command wrappers ---
 if [[ -z "${FUNCMGR:-}" ]]; then
-FUNCMGR="1"
-declare -A CMD_WRAPPERS_PRIORITY   # klíč = název wrapperu, hodnota = priorita
-declare -a CMD_WRAPPERS_ORDER      # seznam wrapperů v pořadí registrace
+  FUNCMGR="1"
+  declare -A CMD_WRAPPERS_PRIORITY   # key = wrapper function name, value = priority
+  declare -a CMD_WRAPPERS_ORDER      # list of wrapper names in registration order
 fi
 
+# Register a command wrapper with optional priority.
+# Lower priority numbers are executed first.
+# usage: register_cmd_wrapper <function_name> [priority]
 register_cmd_wrapper() {
     local func_name="$1"
-    local priority="${2:-1000}"   # default priority 1000, debug/dir mohou mít 999/1000
+    local priority="${2:-1000}"   # default priority = 1000
     CMD_WRAPPERS_PRIORITY["$func_name"]="$priority"
-    # Přidat do seznamu, pokud ještě není
+
+    # Only add to order list if not already present
     for w in "${CMD_WRAPPERS_ORDER[@]}"; do
         [[ "$w" == "$func_name" ]] && return
     done
     CMD_WRAPPERS_ORDER+=("$func_name")
 }
 
-# Funkce na získání seznamu wrapperů seřazených podle priority
+# Get list of wrappers sorted by priority
 get_wrappers_sorted() {
     local sorted
     sorted=$(for w in "${CMD_WRAPPERS_ORDER[@]}"; do
@@ -103,7 +117,7 @@ get_wrappers_sorted() {
     echo "$sorted"
 }
 
-# Wrapper handler
+# Apply all registered wrappers in order to a command
 cmd_wrapper() {
     local cmd="$*"
     local w
@@ -113,13 +127,14 @@ cmd_wrapper() {
     echo "$cmd"
 }
 
+# Unregister a previously registered command wrapper
 unregister_cmd_wrapper() {
     local func_name="$1"
 
-    # Vymazat z priority mapy
+    # Remove from priority map
     unset 'CMD_WRAPPERS_PRIORITY["$func_name"]'
 
-    # Přefiltrovat order pole bez daného wrapperu
+    # Rebuild order list without this wrapper
     local new_list=()
     for w in "${CMD_WRAPPERS_ORDER[@]}"; do
         [[ "$w" == "$func_name" ]] || new_list+=("$w")
@@ -127,16 +142,22 @@ unregister_cmd_wrapper() {
     CMD_WRAPPERS_ORDER=("${new_list[@]}")
 }
 
+# ----------------------------------------------------------------------
+# Exit hook management
+# ----------------------------------------------------------------------
+
+# Register a function to be called on program exit
 register_exit_func() {
   local fn="$1"
   EXIT_FUNCS+=("$fn")
 }
 
-# Trap to call all registered exit functions on normal exit
+# Run all registered exit functions
 run_exit_funcs() {
   for fn in "${EXIT_FUNCS[@]}"; do
     "$fn"
   done
 }
 
+# Ensure exit functions are executed on normal program termination
 trap run_exit_funcs EXIT

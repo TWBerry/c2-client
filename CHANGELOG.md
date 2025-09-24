@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2025-09-23
+
+### Added
+- New **dir module** for maintaining a virtual working directory across commands.
+- `dir_wrapper` registered as a command wrapper to handle `cd`, `pwd`, and other path-related commands.
+- Command wrapper registration now supports **priority parameter** to control execution order.
+
+### Changed
+- `register_cmd_wrapper` updated to accept a priority argument (higher value = executed later).
+- Dependencies on `awk` on the remote system removed; helper functions adapted to work without it.
+
+### Fixed
+- Various bugs in wrapper handling and directory management.
+- Improved error handling in `dir_cd` and related functions.
+
+
 ## [1.2.0] - 2025-09-21
 
 ### Added
@@ -34,7 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Improved cleanup handling for Gameover(lay) module.
 - Better error handling in wrapper registration when target function is missing.
-
+- Overall code improvement
+- More comments added
 
 ## [1.1.0] - 2025-09-20
 

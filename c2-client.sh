@@ -31,7 +31,7 @@ print_dbg() {
 }
 
 main_loop_command=""
-VERSION="1.2.0"
+VERSION="1.3.0"
 source "funcmgr.sh"
 # Check if readline is available
 check_readline() {
@@ -239,10 +239,15 @@ assemble_main_loop() {
   main_loop_command+='    clear_history)'$'\n'
   main_loop_command+='      clear_history'$'\n'
   main_loop_command+='      ;;'$'\n'
-
+  echo "send_cmd - execute command remotely" > ./scripts/available_functions
+  echo "print_std - print standart message" >> ./scripts/available_functions
+  echo "print_warn - print warning message" >> ./scripts/available_functions
+  echo "print_err - print error message" >> ./scripts/available_functions
+  echo "print_dbg - print debug message to log file" >> ./scripts/available_functions
   # Add all registered functions to the case statement
   for line in "${functions_list[@]}"; do
     read -r w1 w2 w3 w4 <<<"$line"
+    echo "$w2 - $w4" >> ./scripts/available_functions
     main_loop_command+="    $w1)"$'\n'
     if ((w3 > 0)); then
       main_loop_command+='      shift'$'\n'
@@ -319,7 +324,6 @@ if [[ "$#" -eq 0 || "$1" == "--help" || "$1" == "-h" ]]; then
 fi
 
 # Initialize the module and start the main program
-
 load_modules
 process_cmdline_params "$@"
 module_init "${CMDLINE_REMAINING[@]}"

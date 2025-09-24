@@ -1,0 +1,27 @@
+send_cmd - execute command remotely
+print_std - print standart message
+print_warn - print warning message
+print_err - print error message
+print_dbg - print debug message to log file
+network_summary - Network summary (grouped)
+network_local - Local interface & hardware info
+network_connections - Active connections & listeners
+network_config - Routing, DNS, firewall configuration
+network_tools - Aux network tools (traceroute, external IP, wireless)
+explore - Target system basic info
+find_suid - Find SUID binaries
+find_files - Find files by regex
+detect_sandbox - Detect and determine sandbox type
+enable_tor - Enable tor socks proxy
+disable_tor - Disable tor socks proxy
+show_ip - Show public IP
+change_ip - Request new Tor identity
+parallel_download - Download a file
+parallel_upload - Upload a file
+emergency_upload - Emergency upload for small non-binary files
+emergency_download - Emergency download for small non-binary files
+enable_gameover - Setup gameover(lay) LPE command wrapper
+disable_gameover - Disable gameover(lay) LPE command wrapper
+dir_cd - change remote directory
+dir_pwd - print remote working directory
+run_script - Run user script
