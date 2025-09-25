@@ -323,7 +323,69 @@ if [[ "$#" -eq 0 || "$1" == "--help" || "$1" == "-h" ]]; then
   exit 0
 fi
 
+# generate_undocumented_functions [modules_dir] [available_file] [out_file]
+# Defaulty: modules.d, scripts/available_functions, scripts/undocumented_functions
+# -------------------------------------------------------------------
+# Vygeneruje seznam helper funkcí z modulů, které nejsou zdokumentované
+# a uloží je do scripts/undocumented_functions
+# -------------------------------------------------------------------
+get_undocumented_functions() {
+    local MODULES_DIR="modules.d"
+    local AVAILABLE_FILE="scripts/available_functions"
+    local HELPERS_FILE="scripts/undocumented_functions"
+
+    # Načti existující hlavní funkce
+    declare -A existing
+    while IFS=' -' read -r func _; do
+        [[ -n "$func" ]] && existing["$func"]=1
+    done < "$AVAILABLE_FILE"
+
+    # Asociativní pole pro unikátní helper funkce
+    declare -A seen_helpers
+
+    > "$HELPERS_FILE"
+
+    for module in "$MODULES_DIR"/*.sh; do
+        # Vynech shell moduly
+        if [[ "$module" =~ shell ]]; then
+            continue
+        fi
+
+        # Získat module_id (3. řádek, odtrhnout '# ' prefix)
+        local module_id
+        module_id=$(sed -n '3p' "$module" | sed 's/^#\s*//')
+
+        # Najdi všechny funkce v souboru
+        while IFS= read -r line; do
+            if [[ $line =~ ^([a-zA-Z0-9_]+)\(\) ]]; then
+                local fname="${BASH_REMATCH[1]}"
+
+                # Vynech hlavní modulové funkce
+                if [[ "$fname" =~ ^${module_id}_ ]]; then
+                    continue
+                fi
+                # Vynech pokud je už v available_functions
+                if [[ ${existing[$fname]+x} ]]; then
+                    continue
+                fi
+                # Vynech pokud jsme už tuto helper funkci zapsali
+                if [[ ${seen_helpers[$fname]+x} ]]; then
+                    continue
+                fi
+
+                # Přidej do souboru
+                echo "$fname - function from $module_id" >> "$HELPERS_FILE"
+                seen_helpers["$fname"]=1
+            fi
+        done < "$module"
+    done
+
+}
+
+
+
 # Initialize the module and start the main program
+get_undocumented_functions
 load_modules
 process_cmdline_params "$@"
 module_init "${CMDLINE_REMAINING[@]}"

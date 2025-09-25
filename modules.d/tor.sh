@@ -77,13 +77,14 @@ disable_tor() {
 }
 
 # helper: call curl via Tor if ALL_PROXY set, otherwise direct
-# helper: call curl via Tor if ALL_PROXY set, otherwise direct
 _get_ip_via_tor_or_direct() {
   local candidates=(
+    "https://api.ipify.org"
+    "https://ipv4.icanhazip.com"
+    "https://4.icanhazip.com"
+    "https://checkip.amazonaws.com"
     "https://ifconfig.me"
     "https://ipinfo.io/ip"
-    "https://api.ipify.org"
-    "https://checkip.amazonaws.com"
   )
   local ip
 

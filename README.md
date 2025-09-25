@@ -90,7 +90,7 @@ Where:
 
 * `command_name` = the command string used in the C2 shell
 * `function_name` = Bash function name implemented in the module
-* `param_count` = number of parameters expected(be aware -c <number> is counted as 2 one for -c and one for <number> )
+* `param_count` = number of parameters expected(be aware -c number is counted as 2 one for -c and one for number )
 * `Description` = short help text
 
 ## Command-Line Parameter Handling (`funcmgr.sh`)
@@ -210,10 +210,11 @@ done
 2. Execute the script with the `run_script` from script module:
 
 ```c2
-run_script ./scripts/my_scan.c2
+run_script ./scripts/my_scan.c2 param1 param2...
 ```
 
 3. All output is **captured through the client**, and errors are handled via `print_err` or internal logging.
+4. Up to ten parameters is supported.
 
 ### Notes
 
